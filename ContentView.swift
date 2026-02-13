@@ -313,32 +313,117 @@ struct BookCover: View {
 
     var body: some View {
         ZStack {
-            // Main cover with rounded corners
-            RoundedRectangle(cornerRadius: 12)
-                .fill(notebook.coverColor)
+            // Main cover - matte plastic base with soft radial gradient
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            notebook.coverColor.opacity(0.92),
+                            notebook.coverColor
+                        ],
+                        center: .init(x: 0.4, y: 0.35),
+                        startRadius: width * 0.05,
+                        endRadius: width * 0.9
+                    )
+                )
                 .frame(width: width, height: height)
-                .shadow(color: Color.black.opacity(0.2), radius: 8, x: 2, y: 4)
+                .shadow(color: Color.black.opacity(0.18), radius: 12, x: 3, y: 6)
 
-            // Gradient overlay for depth
-            RoundedRectangle(cornerRadius: 12)
+            // Inner soft shadow for puffy 3D look
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.35), Color.clear, Color.black.opacity(0.1)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 2
+                )
+                .frame(width: width - 1, height: height - 1)
+
+            // Top highlight for matte plastic sheen
+            RoundedRectangle(cornerRadius: 16)
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.12), Color.clear, Color.black.opacity(0.08)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                        colors: [
+                            Color.white.opacity(0.18),
+                            Color.white.opacity(0.06),
+                            Color.clear,
+                            Color.clear,
+                            Color.black.opacity(0.06)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
                 )
                 .frame(width: width, height: height)
 
+            // Side highlight for rounded 3D edge
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.12),
+                            Color.clear,
+                            Color.clear,
+                            Color.black.opacity(0.04)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: width, height: height)
+
+            // 3 vertical grooved lines (suitcase ridges)
+            HStack(spacing: width * 0.07) {
+                ForEach(0..<3, id: \.self) { _ in
+                    ZStack {
+                        // Shadow side of groove (right)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.white.opacity(0.25))
+                            .frame(width: 3, height: height * 0.45)
+                            .offset(x: 1.5)
+
+                        // Dark side of groove (left)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.black.opacity(0.1))
+                            .frame(width: 3, height: height * 0.45)
+                            .offset(x: -0.5)
+
+                        // Main groove indent
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.black.opacity(0.08),
+                                        Color.black.opacity(0.04),
+                                        Color.white.opacity(0.15)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 4, height: height * 0.45)
+                    }
+                }
+            }
+            .offset(x: width * 0.03)
+
             // Spine on left edge
             HStack(spacing: 0) {
                 UnevenRoundedRectangle(
-                    topLeadingRadius: 12,
-                    bottomLeadingRadius: 12,
+                    topLeadingRadius: 16,
+                    bottomLeadingRadius: 16,
                     bottomTrailingRadius: 0,
                     topTrailingRadius: 0
                 )
-                .fill(notebook.spineColor)
+                .fill(
+                    LinearGradient(
+                        colors: [notebook.spineColor.opacity(0.85), notebook.spineColor],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
                 .frame(width: 14)
                 Spacer()
             }
