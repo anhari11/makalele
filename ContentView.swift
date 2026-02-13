@@ -15,6 +15,7 @@ struct Notebook: Identifiable {
     let pageCount: Int
     let coverColor: Color
     let spineColor: Color
+    let pageEdgeColor: Color
     let hasCoverArt: Bool
     let textureURL: String
 }
@@ -23,20 +24,19 @@ struct Notebook: Identifiable {
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-       
-        Notebook(title: "Personal", pageCount: 24, coverColor: Color(hex: "5BBF7A"), spineColor: Color(hex: "4AA866"), hasCoverArt: false, textureURL: "https://www.sketchuptextureclub.com/public/texture_m/0017-green-velvet-fabric-texture-seamless.jpg"),
-        Notebook(title: "Work", pageCount: 12, coverColor: Color(hex: "C75B4A"), spineColor: Color(hex: "A84D3F"), hasCoverArt: false, textureURL: "https://www.sketchuptextureclub.com/public/texture_m/0013-red-velvet-fabric-texture-seamless.jpg"),
-        Notebook(title: "Ideas", pageCount: 8, coverColor: Color(hex: "E8C547"), spineColor: Color(hex: "C9A93D"), hasCoverArt: false, textureURL: "https://www.sketchuptextureclub.com/public/texture_m/0021-yellow-velvet-fabric-texture-seamless.jpg")
+        Notebook(title: "Personal", pageCount: 24, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: ""),
+        Notebook(title: "Journal", pageCount: 1, coverColor: Color(hex: "D4705A"), spineColor: Color(hex: "A84535"), pageEdgeColor: Color(hex: "C75540"), hasCoverArt: false, textureURL: ""),
+        Notebook(title: "Ideas", pageCount: 8, coverColor: Color(hex: "B5AE8A"), spineColor: Color(hex: "D4B830"), pageEdgeColor: Color(hex: "D4B830"), hasCoverArt: false, textureURL: "")
     ]
-    @State private var selectedIndex: Int = 0
+    @State private var selectedIndex: Int = 1
     @State private var showOnboarding: Bool = true
     @State private var dragOffset: CGFloat = 0
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background
-                Color.white
+                // Background - muted purple like Paper app
+                Color(hex: "7B7394")
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -47,16 +47,16 @@ struct ContentView: View {
                     // Notebook Title
                     VStack(spacing: geometry.size.width > 500 ? 12 : 8) {
                         Text(notebooks[selectedIndex].title)
-                            .font(.system(size: geometry.size.width > 500 ? 42 : 32, weight: .semibold))
-                            .foregroundColor(Color(hex: "2D2D2D"))
+                            .font(.system(size: geometry.size.width > 500 ? 42 : 32, weight: .bold, design: .serif))
+                            .foregroundColor(.white)
 
                         HStack(spacing: 6) {
                             Image(systemName: "pencil.and.outline")
                                 .font(.system(size: geometry.size.width > 500 ? 18 : 14))
-                            Text("\(notebooks[selectedIndex].pageCount) Pages")
+                            Text("\(notebooks[selectedIndex].pageCount) \(notebooks[selectedIndex].pageCount == 1 ? "Page" : "Pages")")
                                 .font(.system(size: geometry.size.width > 500 ? 20 : 16, weight: .medium))
                         }
-                        .foregroundColor(Color(hex: "888888"))
+                        .foregroundColor(.white.opacity(0.7))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, geometry.size.width > 500 ? 50 : 30)
@@ -71,11 +71,14 @@ struct ContentView: View {
                         dragOffset: $dragOffset,
                         screenWidth: geometry.size.width
                     )
-                    .frame(height: geometry.size.width > 500 ? 550 : 400)
+                    .frame(height: geometry.size.width > 500 ? 560 : 440)
 
                     Spacer()
 
-                   
+                    // Bottom Action Bar
+                    BottomActionBar()
+                        .padding(.bottom, 16)
+
                     // Onboarding Prompt
                     if showOnboarding {
                         OnboardingPrompt {
@@ -98,14 +101,23 @@ struct ContentView: View {
 struct HeaderView: View {
     var body: some View {
         HStack {
-            CircleButton {
-                HStack(spacing: 2) {
-                    ForEach(0..<4, id: \.self) { i in
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color(hex: "4A4A4A"))
-                            .frame(width: 2.5, height: [12, 16, 16, 12][i])
+            HStack(spacing: 10) {
+                // Paper Store logo
+                ZStack {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 36, height: 36)
+                    HStack(spacing: 2) {
+                        ForEach(0..<4, id: \.self) { i in
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color(hex: "3D3D3D"))
+                                .frame(width: 2.5, height: [10, 14, 14, 10][i])
+                        }
                     }
                 }
+                Text("Paper Store")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
             }
 
             Spacer()
@@ -114,20 +126,20 @@ struct HeaderView: View {
                 CircleButton {
                     Text("¹₂³")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(Color(hex: "4A4A4A"))
+                        .foregroundColor(.white)
                 }
 
                 CircleButton {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(Color(hex: "4A4A4A"))
+                        .foregroundColor(.white)
                 }
 
                 CircleButton {
                     VStack(spacing: 4) {
                         ForEach(0..<3, id: \.self) { _ in
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(Color(hex: "4A4A4A"))
+                                .fill(Color.white)
                                 .frame(width: 18, height: 2)
                         }
                     }
@@ -154,10 +166,10 @@ struct CircleButton<Content: View>: View {
     var body: some View {
         Button(action: {}) {
             content
-                .frame(width: isIPad ? 60 : 50, height: isIPad ? 60 : 50)
+                .frame(width: isIPad ? 60 : 44, height: isIPad ? 60 : 44)
                 .background(
                     Circle()
-                        .stroke(Color(hex: "E0E0E0"), lineWidth: 1.5)
+                        .stroke(Color.white.opacity(0.35), lineWidth: 1.5)
                 )
         }
     }
@@ -177,11 +189,11 @@ struct BookCarousel: View {
     }
 
     private var bookWidth: CGFloat {
-        screenWidth * 0.45
+        screenWidth * 0.48
     }
 
     private var bookHeight: CGFloat {
-        isIPad ? 400 : 260
+        isIPad ? 480 : 360
     }
 
     private var bookSpacing: CGFloat {
@@ -258,38 +270,39 @@ struct BookItem: View {
     let bookWidth: CGFloat
     let bookHeight: CGFloat
 
-    // When dragging, selected book looks like non-selected (on floor, no shadow)
     private var isElevated: Bool {
         isSelected && !isDragging
     }
 
     private var elevation: CGFloat {
-        isElevated ? -60 : 0
+        isElevated ? -30 : 0
     }
 
     private var scale: CGFloat {
-        isElevated ? 1.05 : 0.9
-    }
-
-    private var shadowOpacity: Double {
-        isElevated ? 0.90 : 0.90
-    }
-
-    private var shadowRadius: CGFloat {
-        isElevated ? 25 : 0
-    }
-
-    private var shadowY: CGFloat {
-        isElevated ? 55 : 0
+        isSelected ? 1.0 : 0.92
     }
 
     var body: some View {
-        ZStack {
-            // Book
+        ZStack(alignment: .topTrailing) {
             BookCover(notebook: notebook, width: bookWidth, height: bookHeight)
-                .scaleEffect(scale)
-                .offset(y: elevation)
+                .shadow(color: Color.black.opacity(isElevated ? 0.4 : 0.25), radius: isElevated ? 30 : 15, x: 5, y: isElevated ? 30 : 10)
+
+            // Settings icon on selected book
+            if isSelected {
+                ZStack {
+                    Circle()
+                        .fill(Color.black.opacity(0.45))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                }
+                .offset(x: -12, y: 12)
+                .transition(.opacity)
+            }
         }
+        .scaleEffect(scale)
+        .offset(y: elevation)
         .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isSelected)
         .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isDragging)
     }
@@ -297,139 +310,215 @@ struct BookItem: View {
 
 // MARK: - Book Cover
 
+// Full book outline: rounded rect with a concave arc on the left edge
+struct BookShape: Shape {
+    let cornerRadius: CGFloat
+    let insetRight: CGFloat // where the inset strip ends (right edge of spine recess)
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let r = cornerRadius
+        let w = rect.width
+        let h = rect.height
+
+        // Top-left corner (small rounding)
+        path.move(to: CGPoint(x: r * 0.4, y: 0))
+
+        // Top edge → top-right corner
+        path.addLine(to: CGPoint(x: w - r, y: 0))
+        path.addQuadCurve(
+            to: CGPoint(x: w, y: r),
+            control: CGPoint(x: w, y: 0)
+        )
+
+        // Right edge → bottom-right corner
+        path.addLine(to: CGPoint(x: w, y: h - r))
+        path.addQuadCurve(
+            to: CGPoint(x: w - r, y: h),
+            control: CGPoint(x: w, y: h)
+        )
+
+        // Bottom edge → bottom-left
+        path.addLine(to: CGPoint(x: r * 0.4, y: h))
+
+        // Left edge: concave arc inward (the spine recess makes the left bulge out slightly)
+        // We create a subtle outward arc on the left
+        path.addQuadCurve(
+            to: CGPoint(x: r * 0.4, y: 0),
+            control: CGPoint(x: -w * 0.018, y: h / 2)
+        )
+
+        path.closeSubpath()
+        return path
+    }
+}
+
 struct BookCover: View {
     let notebook: Notebook
     let width: CGFloat
     let height: CGFloat
 
+    private var cornerRad: CGFloat { 12 }
+    // Spine inset strip: ~8% of book width
+    private var insetWidth: CGFloat { width * 0.08 }
+    // Position of the primary groove from the left edge
+    private var groove1X: CGFloat { width * 0.075 }
+    // Second thinner groove slightly to the right
+    private var groove2X: CGFloat { width * 0.095 }
+
     var body: some View {
-        ZStack {
-            // Base color fill
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(notebook.coverColor)
-                .frame(width: width, height: height)
-                .shadow(color: Color.black.opacity(0.10), radius: 30, x: 0, y: 14)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+        Canvas { context, size in
+            let rect = CGRect(origin: .zero, size: size)
 
-            // Texture from assets — tiled across cover
-            Image("texture")
-                .resizable(resizingMode: .tile)
-                .frame(width: width, height: height)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(notebook.coverColor.opacity(0.45))
-                )
+            let bookPath = BookShape(
+                cornerRadius: cornerRad,
+                insetRight: groove2X + 4
+            ).path(in: rect)
 
-            // Velvet nap directional sheen
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.12), location: 0),
-                            .init(color: Color.white.opacity(0.04), location: 0.15),
-                            .init(color: Color.clear, location: 0.35),
-                            .init(color: Color.black.opacity(0.03), location: 0.55),
-                            .init(color: Color.black.opacity(0.08), location: 0.80),
-                            .init(color: Color.black.opacity(0.12), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(width: width, height: height)
+            // ── 1. Base cover fill ──
+            context.fill(bookPath, with: .color(notebook.coverColor))
 
-            // Soft radial sheen
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.white.opacity(0.08),
-                            Color.white.opacity(0.02),
-                            Color.clear
-                        ],
-                        center: .init(x: 0.45, y: 0.2),
-                        startRadius: 0,
-                        endRadius: max(width, height) * 0.55
-                    )
-                )
-                .frame(width: width, height: height)
+            // ── 2. Paper grain texture (noise simulation via tiny dots) ──
+            // Overlay a very subtle noise-like pattern using radial micro-gradients
+            let grainGrad = Gradient(stops: [
+                .init(color: Color.white.opacity(0.03), location: 0),
+                .init(color: Color.black.opacity(0.02), location: 0.5),
+                .init(color: Color.white.opacity(0.01), location: 1.0)
+            ])
+            context.fill(bookPath, with: .radialGradient(
+                grainGrad,
+                center: CGPoint(x: size.width * 0.3, y: size.height * 0.2),
+                startRadius: 0,
+                endRadius: max(size.width, size.height) * 0.9
+            ))
 
-            // Soft edge border
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.14), location: 0),
-                            .init(color: Color.white.opacity(0.04), location: 0.3),
-                            .init(color: Color.clear, location: 0.5),
-                            .init(color: Color.black.opacity(0.04), location: 0.8),
-                            .init(color: Color.black.opacity(0.08), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-                .frame(width: width, height: height)
+            // ── 3. Recessed spine inset strip (darker orange, concave) ──
+            let insetRect = CGRect(x: 0, y: 0, width: groove2X + 6, height: size.height)
+            let insetPath = Path(insetRect).intersection(bookPath)
 
-            // Spine groove on the left (library style)
-            LinearGradient(
-                stops: [
-                    .init(color: Color.clear, location: 0),
-                    .init(color: Color.black.opacity(0.18), location: 0.35),
-                    .init(color: Color.black.opacity(0.22), location: 0.5),
-                    .init(color: Color.black.opacity(0.10), location: 0.7),
-                    .init(color: Color.white.opacity(0.12), location: 0.85),
-                    .init(color: Color.clear, location: 1.0)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: 10, height: height)
-            .offset(x: -(width / 2) + (width * 0.07) + 5)
-            .frame(width: width, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            // Fill inset with darker cover color
+            context.fill(insetPath, with: .color(notebook.spineColor))
 
-            // 3 vertical grooved lines
-            HStack(spacing: width * 0.08) {
-                ForEach(0..<3, id: \.self) { _ in
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 2.5)
-                            .fill(Color.black.opacity(0.08))
-                            .frame(width: 5, height: height * 0.46)
-                            .offset(x: -0.5)
+            // Concave shading: center of inset is darkest, edges catch light
+            let concaveGrad = Gradient(stops: [
+                .init(color: Color.white.opacity(0.08), location: 0),      // left highlight
+                .init(color: Color.clear, location: 0.15),
+                .init(color: Color.black.opacity(0.10), location: 0.35),   // darken toward center
+                .init(color: Color.black.opacity(0.14), location: 0.5),    // deepest point
+                .init(color: Color.black.opacity(0.08), location: 0.65),
+                .init(color: Color.clear, location: 0.82),
+                .init(color: Color.white.opacity(0.06), location: 1.0)     // right raised highlight
+            ])
+            context.fill(insetPath, with: .linearGradient(
+                concaveGrad,
+                startPoint: CGPoint(x: 0, y: rect.midY),
+                endPoint: CGPoint(x: groove2X + 6, y: rect.midY)
+            ))
 
-                        RoundedRectangle(cornerRadius: 2.5)
-                            .fill(Color.white.opacity(0.14))
-                            .frame(width: 2, height: height * 0.46)
-                            .offset(x: 2.5)
+            // ── 4. Inner shadow along left inner edge of inset ──
+            let leftInnerShadow = CGRect(x: 1, y: 0, width: 4, height: size.height)
+            let leftISPath = Path(leftInnerShadow).intersection(bookPath)
+            let leftISGrad = Gradient(stops: [
+                .init(color: Color.black.opacity(0.12), location: 0),
+                .init(color: Color.clear, location: 1.0)
+            ])
+            context.fill(leftISPath, with: .linearGradient(
+                leftISGrad,
+                startPoint: CGPoint(x: 1, y: rect.midY),
+                endPoint: CGPoint(x: 5, y: rect.midY)
+            ))
 
-                        RoundedRectangle(cornerRadius: 2.5)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.10),
-                                        Color.black.opacity(0.04),
-                                        Color.white.opacity(0.06)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: 3.5, height: height * 0.46)
-                    }
-                }
-            }
-            .offset(x: width * 0.08)
+            // ── 5. Primary groove line (thin dark line near left edge) ──
+            let g1Rect = CGRect(x: groove1X - 1.5, y: 0, width: 3, height: size.height)
+            let g1Path = Path(g1Rect).intersection(bookPath)
+            let g1Grad = Gradient(stops: [
+                .init(color: Color.black.opacity(0.22), location: 0),
+                .init(color: Color.black.opacity(0.28), location: 0.45),
+                .init(color: Color.black.opacity(0.10), location: 0.6),
+                .init(color: Color.white.opacity(0.10), location: 0.85),
+                .init(color: Color.clear, location: 1.0)
+            ])
+            context.fill(g1Path, with: .linearGradient(
+                g1Grad,
+                startPoint: CGPoint(x: g1Rect.minX, y: rect.midY),
+                endPoint: CGPoint(x: g1Rect.maxX, y: rect.midY)
+            ))
 
-            // Cover art
-            if notebook.hasCoverArt {
-                PaperDemoCoverArt()
-                    .frame(width: width - 30, height: height - 40)
-            }
+            // ── 6. Second thinner groove line (slightly to the right) ──
+            let g2Rect = CGRect(x: groove2X - 0.75, y: 0, width: 2, height: size.height)
+            let g2Path = Path(g2Rect).intersection(bookPath)
+            let g2Grad = Gradient(stops: [
+                .init(color: Color.black.opacity(0.18), location: 0),
+                .init(color: Color.black.opacity(0.22), location: 0.4),
+                .init(color: Color.clear, location: 0.6),
+                .init(color: Color.white.opacity(0.08), location: 0.9),
+                .init(color: Color.clear, location: 1.0)
+            ])
+            context.fill(g2Path, with: .linearGradient(
+                g2Grad,
+                startPoint: CGPoint(x: g2Rect.minX, y: rect.midY),
+                endPoint: CGPoint(x: g2Rect.maxX, y: rect.midY)
+            ))
 
+            // ── 7. Raised highlight on the outer right edge of the inset ──
+            // This is the "lip" where the inset meets the flat cover
+            let lipRect = CGRect(x: groove2X + 3, y: 0, width: 6, height: size.height)
+            let lipPath = Path(lipRect).intersection(bookPath)
+            let lipGrad = Gradient(stops: [
+                .init(color: Color.white.opacity(0.14), location: 0),
+                .init(color: Color.white.opacity(0.06), location: 0.3),
+                .init(color: Color.clear, location: 1.0)
+            ])
+            context.fill(lipPath, with: .linearGradient(
+                lipGrad,
+                startPoint: CGPoint(x: lipRect.minX, y: rect.midY),
+                endPoint: CGPoint(x: lipRect.maxX, y: rect.midY)
+            ))
+
+            // ── 8. Ambient occlusion where inset meets main cover ──
+            // Soft dark bleed on the cover side right next to the lip
+            let aoRect = CGRect(x: groove2X + 2, y: 0, width: 3, height: size.height)
+            let aoPath = Path(aoRect).intersection(bookPath)
+            let aoGrad = Gradient(stops: [
+                .init(color: Color.black.opacity(0.08), location: 0),
+                .init(color: Color.clear, location: 1.0)
+            ])
+            context.fill(aoPath, with: .linearGradient(
+                aoGrad,
+                startPoint: CGPoint(x: aoRect.minX, y: rect.midY),
+                endPoint: CGPoint(x: aoRect.maxX, y: rect.midY)
+            ))
+
+            // ── 9. Studio lighting: top-left soft light ──
+            let lightGrad = Gradient(stops: [
+                .init(color: Color.white.opacity(0.10), location: 0),
+                .init(color: Color.white.opacity(0.04), location: 0.25),
+                .init(color: Color.clear, location: 0.55)
+            ])
+            context.fill(bookPath, with: .radialGradient(
+                lightGrad,
+                center: CGPoint(x: size.width * 0.2, y: size.height * 0.05),
+                startRadius: 0,
+                endRadius: max(size.width, size.height) * 0.7
+            ))
+
+            // ── 10. Bottom-right subtle darkening (away from light) ──
+            let shadowGrad = Gradient(stops: [
+                .init(color: Color.clear, location: 0),
+                .init(color: Color.clear, location: 0.5),
+                .init(color: Color.black.opacity(0.04), location: 0.8),
+                .init(color: Color.black.opacity(0.10), location: 1.0)
+            ])
+            context.fill(bookPath, with: .linearGradient(
+                shadowGrad,
+                startPoint: CGPoint(x: 0, y: 0),
+                endPoint: CGPoint(x: size.width, y: size.height)
+            ))
+
+            // ── 11. Very subtle edge stroke ──
+            context.stroke(bookPath, with: .color(Color.black.opacity(0.06)), lineWidth: 0.5)
         }
+        .frame(width: width, height: height)
     }
 }
 
@@ -534,8 +623,9 @@ struct BottomActionBar: View {
     @Environment(\.horizontalSizeClass) var sizeClass
 
     var body: some View {
-        HStack(spacing: sizeClass == .regular ? 24 : 16) {
+        HStack(spacing: sizeClass == .regular ? 20 : 14) {
             ActionButton(icon: "ellipsis")
+            ActionButton(icon: "square.and.arrow.up")
             ActionButton(icon: "trash")
             ActionButton(icon: "plus")
         }
@@ -554,13 +644,13 @@ struct ActionButton: View {
     var body: some View {
         Button(action: {}) {
             Image(systemName: icon)
-                .font(.system(size: isIPad ? 26 : 20, weight: .medium))
-                .foregroundColor(Color(hex: "4A4A50"))
-                .frame(width: isIPad ? 70 : 56, height: isIPad ? 70 : 56)
+                .font(.system(size: isIPad ? 22 : 18, weight: .medium))
+                .foregroundColor(Color(hex: "3D3D3D"))
+                .frame(width: isIPad ? 60 : 48, height: isIPad ? 60 : 48)
                 .background(
                     Circle()
                         .fill(Color.white)
-                        .shadow(color: Color.black.opacity(0.15), radius: isIPad ? 12 : 8, x: 0, y: 4)
+                        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 3)
                 )
         }
     }
