@@ -373,24 +373,21 @@ struct BookCover: View {
                 )
                 .frame(width: width, height: height)
 
-            // Spine groove line on the left (library style)
-            HStack(spacing: 0) {
-                Spacer()
-                    .frame(width: width * 0.07)
-
-                ZStack {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.25))
-                        .frame(width: 2)
-                    Rectangle()
-                        .fill(Color.white.opacity(0.10))
-                        .frame(width: 1)
-                        .offset(x: 1.5)
-                }
-                .frame(width: 4, height: height)
-
-                Spacer()
-            }
+            // Spine groove on the left (library style)
+            LinearGradient(
+                stops: [
+                    .init(color: Color.clear, location: 0),
+                    .init(color: Color.black.opacity(0.18), location: 0.35),
+                    .init(color: Color.black.opacity(0.22), location: 0.5),
+                    .init(color: Color.black.opacity(0.10), location: 0.7),
+                    .init(color: Color.white.opacity(0.12), location: 0.85),
+                    .init(color: Color.clear, location: 1.0)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 10, height: height)
+            .offset(x: -(width / 2) + (width * 0.07) + 5)
             .frame(width: width, height: height)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
