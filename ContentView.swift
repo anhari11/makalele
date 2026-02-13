@@ -75,10 +75,7 @@ struct ContentView: View {
 
                     Spacer()
 
-                    // Bottom Action Buttons
-                    BottomActionBar()
-                        .padding(.bottom, 20)
-
+                   
                     // Onboarding Prompt
                     if showOnboarding {
                         OnboardingPrompt {
@@ -180,7 +177,7 @@ struct BookCarousel: View {
     }
 
     private var bookWidth: CGFloat {
-        isIPad ? 320 : 220
+        screenWidth * 0.45
     }
 
     private var bookHeight: CGFloat {
@@ -275,7 +272,7 @@ struct BookItem: View {
     }
 
     private var shadowOpacity: Double {
-        isElevated ? 0.35 : 0
+        isElevated ? 0.90 : 0.90
     }
 
     private var shadowRadius: CGFloat {
@@ -288,13 +285,6 @@ struct BookItem: View {
 
     var body: some View {
         ZStack {
-            // Shadow (only when elevated)
-            Ellipse()
-                .fill(Color.black.opacity(shadowOpacity))
-                .frame(width: bookWidth * 0.85, height: 35)
-                .blur(radius: shadowRadius)
-                .offset(y: bookHeight / 2 + shadowY)
-
             // Book
             BookCover(notebook: notebook, width: bookWidth, height: bookHeight)
                 .scaleEffect(scale)
@@ -383,6 +373,27 @@ struct BookCover: View {
                 )
                 .frame(width: width, height: height)
 
+            // Spine groove line on the left (library style)
+            HStack(spacing: 0) {
+                Spacer()
+                    .frame(width: width * 0.07)
+
+                ZStack {
+                    Rectangle()
+                        .fill(Color.black.opacity(0.25))
+                        .frame(width: 2)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: 1)
+                        .offset(x: 1.5)
+                }
+                .frame(width: 4, height: height)
+
+                Spacer()
+            }
+            .frame(width: width, height: height)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
             // 3 vertical grooved lines
             HStack(spacing: width * 0.08) {
                 ForEach(0..<3, id: \.self) { _ in
@@ -413,13 +424,14 @@ struct BookCover: View {
                     }
                 }
             }
-            .offset(x: width * 0.04)
+            .offset(x: width * 0.08)
 
             // Cover art
             if notebook.hasCoverArt {
                 PaperDemoCoverArt()
                     .frame(width: width - 30, height: height - 40)
             }
+
         }
     }
 }
