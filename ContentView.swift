@@ -16,16 +16,17 @@ struct Notebook: Identifiable {
     let coverColor: Color
     let spineColor: Color
     let hasCoverArt: Bool
+    let textureURL: String
 }
 
 // MARK: - Main Content View
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-        Notebook(title: "Paper Demo", pageCount: 17, coverColor: Color(hex: "5BBF7A"), spineColor: Color(hex: "4AA866"), hasCoverArt: true),
-        Notebook(title: "Personal", pageCount: 24, coverColor: Color(hex: "5BBF7A"), spineColor: Color(hex: "4AA866"), hasCoverArt: false),
-        Notebook(title: "Work", pageCount: 12, coverColor: Color(hex: "C75B4A"), spineColor: Color(hex: "A84D3F"), hasCoverArt: false),
-        Notebook(title: "Ideas", pageCount: 8, coverColor: Color(hex: "E8C547"), spineColor: Color(hex: "C9A93D"), hasCoverArt: false)
+       
+        Notebook(title: "Personal", pageCount: 24, coverColor: Color(hex: "5BBF7A"), spineColor: Color(hex: "4AA866"), hasCoverArt: false, textureURL: "https://www.sketchuptextureclub.com/public/texture_m/0017-green-velvet-fabric-texture-seamless.jpg"),
+        Notebook(title: "Work", pageCount: 12, coverColor: Color(hex: "C75B4A"), spineColor: Color(hex: "A84D3F"), hasCoverArt: false, textureURL: "https://www.sketchuptextureclub.com/public/texture_m/0013-red-velvet-fabric-texture-seamless.jpg"),
+        Notebook(title: "Ideas", pageCount: 8, coverColor: Color(hex: "E8C547"), spineColor: Color(hex: "C9A93D"), hasCoverArt: false, textureURL: "https://www.sketchuptextureclub.com/public/texture_m/0021-yellow-velvet-fabric-texture-seamless.jpg")
     ]
     @State private var selectedIndex: Int = 0
     @State private var showOnboarding: Bool = true
@@ -179,7 +180,7 @@ struct BookCarousel: View {
     }
 
     private var bookWidth: CGFloat {
-        isIPad ? 280 : 180
+        isIPad ? 320 : 220
     }
 
     private var bookHeight: CGFloat {
@@ -304,228 +305,358 @@ struct BookItem: View {
     }
 }
 
-// MARK: - Book Cover
+// MARK: - Book Cover (Local texture + lid effect)
 
 struct BookCover: View {
     let notebook: Notebook
     let width: CGFloat
     let height: CGFloat
 
+    // Lid dimensions
+    private var lidWidth: CGFloat { width * 0.08 }
+    private var totalWidth: CGFloat { width + lidWidth }
+
     var body: some View {
-        ZStack {
-            // Base shape with outer shadow for depth
-            RoundedRectangle(cornerRadius: 18)
-                .fill(notebook.coverColor)
-                .frame(width: width, height: height)
-                .shadow(color: Color.black.opacity(0.22), radius: 14, x: 2, y: 8)
-
-            // Matte plastic body: broad diffuse radial highlight (top-left light source)
-            RoundedRectangle(cornerRadius: 18)
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.white.opacity(0.22),
-                            Color.white.opacity(0.08),
-                            Color.clear,
-                            Color.black.opacity(0.06)
-                        ],
-                        center: .init(x: 0.3, y: 0.25),
-                        startRadius: 0,
-                        endRadius: max(width, height) * 0.85
-                    )
-                )
-                .frame(width: width, height: height)
-
-            // Vertical soft ambient gradient (overhead light → bottom shadow)
-            RoundedRectangle(cornerRadius: 18)
-                .fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.10), location: 0),
-                            .init(color: Color.clear, location: 0.35),
-                            .init(color: Color.clear, location: 0.7),
-                            .init(color: Color.black.opacity(0.08), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(width: width, height: height)
-
-            // Soft edge rim light (simulates light wrapping around matte surface)
-            RoundedRectangle(cornerRadius: 18)
-                .strokeBorder(
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.30), location: 0),
-                            .init(color: Color.white.opacity(0.10), location: 0.25),
-                            .init(color: Color.clear, location: 0.5),
-                            .init(color: Color.black.opacity(0.06), location: 0.85),
-                            .init(color: Color.black.opacity(0.10), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 1.5
-                )
-                .frame(width: width, height: height)
-
-            // Inner shadow overlay clipped to shape — gives a subtle recessed plastic feel
-            RoundedRectangle(cornerRadius: 18)
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.clear,
-                            Color.clear,
-                            Color.black.opacity(0.04)
-                        ],
-                        center: .center,
-                        startRadius: min(width, height) * 0.3,
-                        endRadius: max(width, height) * 0.6
-                    )
-                )
-                .frame(width: width, height: height)
-
-            // 3 vertical grooved lines (suitcase ridges)
-            HStack(spacing: width * 0.08) {
-                ForEach(0..<3, id: \.self) { _ in
-                    ZStack {
-                        // Groove shadow (left side, light comes from top-left)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.black.opacity(0.10))
-                            .frame(width: 4.5, height: height * 0.48)
-                            .offset(x: -1)
-
-                        // Groove highlight (right side catch-light)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.white.opacity(0.20))
-                            .frame(width: 2, height: height * 0.48)
-                            .offset(x: 2)
-
-                        // Groove channel
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.09),
-                                        Color.black.opacity(0.03),
-                                        Color.white.opacity(0.12)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: 3.5, height: height * 0.48)
-                    }
-                }
-            }
-            .offset(x: width * 0.04)
-
-            // Spine on left edge
-            HStack(spacing: 0) {
+        HStack(spacing: 0) {
+            // ── Left lid (sunken spine wrap-around) ──
+            ZStack {
+                // Lid base — darker, recessed surface
                 UnevenRoundedRectangle(
-                    topLeadingRadius: 18,
-                    bottomLeadingRadius: 18,
+                    topLeadingRadius: 8,
+                    bottomLeadingRadius: 8,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 0
+                )
+                .fill(notebook.spineColor)
+                .frame(width: lidWidth, height: height * 0.94)
+
+                // Texture on lid
+                Image("texture")
+                    .resizable(resizingMode: .tile)
+                    .frame(width: lidWidth, height: height * 0.94)
+                    .clipShape(UnevenRoundedRectangle(
+                        topLeadingRadius: 8,
+                        bottomLeadingRadius: 8,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 0
+                    ))
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 8,
+                            bottomLeadingRadius: 8,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
+                        .fill(notebook.spineColor.opacity(0.55))
+                    )
+
+                // Sunken shadow — dark on top and right to show it's recessed below the cover
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 8,
+                    bottomLeadingRadius: 8,
                     bottomTrailingRadius: 0,
                     topTrailingRadius: 0
                 )
                 .fill(
                     LinearGradient(
-                        colors: [
-                            notebook.spineColor.opacity(0.75),
-                            notebook.spineColor,
-                            notebook.spineColor.opacity(0.9)
+                        stops: [
+                            .init(color: Color.black.opacity(0.18), location: 0),
+                            .init(color: Color.black.opacity(0.06), location: 0.15),
+                            .init(color: Color.clear, location: 0.4),
+                            .init(color: Color.black.opacity(0.04), location: 0.85),
+                            .init(color: Color.black.opacity(0.10), location: 1.0)
                         ],
-                        startPoint: .leading,
-                        endPoint: .trailing
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
                 )
-                .frame(width: 14)
-                Spacer()
-            }
-            .frame(width: width, height: height)
+                .frame(width: lidWidth, height: height * 0.94)
 
-            // Sunken surface near the bottom with embossed title
-            VStack {
-                Spacer()
-                ZStack {
-                    // Sunken panel base (slightly darker than cover)
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.black.opacity(0.06))
-                        .frame(width: width * 0.6, height: height * 0.1)
-
-                    // Inner shadow top edge (light comes from top-left, so top edge is dark)
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(
+                // Right edge shadow — the "step down" from cover to lid
+                HStack {
+                    Spacer()
+                    Rectangle()
+                        .fill(
                             LinearGradient(
-                                stops: [
-                                    .init(color: Color.black.opacity(0.14), location: 0),
-                                    .init(color: Color.black.opacity(0.06), location: 0.3),
-                                    .init(color: Color.clear, location: 0.5),
-                                    .init(color: Color.white.opacity(0.18), location: 0.85),
-                                    .init(color: Color.white.opacity(0.22), location: 1.0)
+                                colors: [
+                                    Color.black.opacity(0.20),
+                                    Color.black.opacity(0.08),
+                                    Color.clear
                                 ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1.5
-                        )
-                        .frame(width: width * 0.6, height: height * 0.1)
-
-                    // Embossed title text — same groove technique as the 3 lines
-                    ZStack {
-                        // Text shadow (dark offset top-left, simulating pressed-in)
-                        Text(notebook.title.uppercased())
-                            .font(.system(size: width * 0.065, weight: .bold, design: .rounded))
-                            .foregroundColor(Color.black.opacity(0.12))
-                            .offset(x: -0.5, y: -0.5)
-
-                        // Text highlight (light offset bottom-right, catch-light on pressed edge)
-                        Text(notebook.title.uppercased())
-                            .font(.system(size: width * 0.065, weight: .bold, design: .rounded))
-                            .foregroundColor(Color.white.opacity(0.25))
-                            .offset(x: 0.8, y: 0.8)
-
-                        // Main text body (subtle groove fill)
-                        Text(notebook.title.uppercased())
-                            .font(.system(size: width * 0.065, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.10),
-                                        Color.black.opacity(0.04),
-                                        Color.white.opacity(0.12)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                                startPoint: .trailing,
+                                endPoint: .leading
                             )
+                        )
+                        .frame(width: lidWidth * 0.4, height: height * 0.94)
+                }
+                .frame(width: lidWidth, height: height * 0.94)
+            }
+            .offset(y: height * 0.03) // slightly lower than cover — sunken
+
+            // ── Main book cover ──
+            ZStack {
+                // Base color fill
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(notebook.coverColor)
+                    .frame(width: width, height: height)
+                    .shadow(color: Color.black.opacity(0.10), radius: 30, x: 0, y: 14)
+                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+
+                // Texture from assets — tiled across cover
+                Image("texture")
+                    .resizable(resizingMode: .tile)
+                    .frame(width: width, height: height)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(notebook.coverColor.opacity(0.45))
+                    )
+
+                // Velvet nap directional sheen
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.white.opacity(0.12), location: 0),
+                                .init(color: Color.white.opacity(0.04), location: 0.15),
+                                .init(color: Color.clear, location: 0.35),
+                                .init(color: Color.black.opacity(0.03), location: 0.55),
+                                .init(color: Color.black.opacity(0.08), location: 0.80),
+                                .init(color: Color.black.opacity(0.12), location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: width, height: height)
+
+                // Soft radial sheen
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.02),
+                                Color.clear
+                            ],
+                            center: .init(x: 0.45, y: 0.2),
+                            startRadius: 0,
+                            endRadius: max(width, height) * 0.55
+                        )
+                    )
+                    .frame(width: width, height: height)
+
+                // Soft edge border
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.white.opacity(0.14), location: 0),
+                                .init(color: Color.white.opacity(0.04), location: 0.3),
+                                .init(color: Color.clear, location: 0.5),
+                                .init(color: Color.black.opacity(0.04), location: 0.8),
+                                .init(color: Color.black.opacity(0.08), location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+                    .frame(width: width, height: height)
+
+                // 3 vertical grooved lines
+                HStack(spacing: width * 0.08) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(Color.black.opacity(0.08))
+                                .frame(width: 5, height: height * 0.46)
+                                .offset(x: -0.5)
+
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(Color.white.opacity(0.14))
+                                .frame(width: 2, height: height * 0.46)
+                                .offset(x: 2.5)
+
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black.opacity(0.10),
+                                            Color.black.opacity(0.04),
+                                            Color.white.opacity(0.06)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: 3.5, height: height * 0.46)
+                        }
                     }
                 }
                 .offset(x: width * 0.04)
-                .padding(.bottom, height * 0.1)
-            }
-            .frame(width: width, height: height)
 
-            // Cover art
-            if notebook.hasCoverArt {
-                PaperDemoCoverArt()
-                    .frame(width: width - 30, height: height - 40)
-            }
+                // Spine with texture
+                HStack(spacing: 0) {
+                    ZStack {
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 20,
+                            bottomLeadingRadius: 20,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
+                        .fill(notebook.spineColor)
+                        .frame(width: 14, height: height)
 
-            // Page edges on right
-            HStack {
-                Spacer()
-                VStack(spacing: 2) {
-                    ForEach(0..<15, id: \.self) { _ in
-                        Rectangle()
-                            .fill(Color(hex: "F5F3EE"))
-                            .frame(width: 3, height: 1)
+                        // Spine texture
+                        Image("texture")
+                            .resizable(resizingMode: .tile)
+                            .frame(width: 14, height: height)
+                            .clipShape(UnevenRoundedRectangle(
+                                topLeadingRadius: 20,
+                                bottomLeadingRadius: 20,
+                                bottomTrailingRadius: 0,
+                                topTrailingRadius: 0
+                            ))
+                            .overlay(
+                                UnevenRoundedRectangle(
+                                    topLeadingRadius: 20,
+                                    bottomLeadingRadius: 20,
+                                    bottomTrailingRadius: 0,
+                                    topTrailingRadius: 0
+                                )
+                                .fill(notebook.spineColor.opacity(0.5))
+                            )
+
+                        // Spine lighting
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 20,
+                            bottomLeadingRadius: 20,
+                            bottomTrailingRadius: 0,
+                            topTrailingRadius: 0
+                        )
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.06),
+                                    Color.clear,
+                                    Color.black.opacity(0.08)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: 14, height: height)
                     }
+
+                    // Crease
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.black.opacity(0.07),
+                                    Color.black.opacity(0.03),
+                                    Color.black.opacity(0.05)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 1.5)
+
+                    Spacer()
                 }
-                .padding(.trailing, 3)
+                .frame(width: width, height: height)
+
+                // Sunken label panel
+                VStack {
+                    Spacer()
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.black.opacity(0.06))
+                            .frame(width: width * 0.58, height: height * 0.105)
+
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: Color.black.opacity(0.12), location: 0),
+                                        .init(color: Color.black.opacity(0.05), location: 0.3),
+                                        .init(color: Color.clear, location: 0.5),
+                                        .init(color: Color.white.opacity(0.10), location: 0.8),
+                                        .init(color: Color.white.opacity(0.14), location: 1.0)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 1
+                            )
+                            .frame(width: width * 0.58, height: height * 0.105)
+
+                        // Embossed title — gold foil
+                        ZStack {
+                            Text(notebook.title.uppercased())
+                                .font(.system(size: width * 0.055, weight: .semibold, design: .rounded))
+                                .tracking(width * 0.015)
+                                .foregroundColor(Color.black.opacity(0.10))
+                                .offset(x: -0.4, y: -0.4)
+
+                            Text(notebook.title.uppercased())
+                                .font(.system(size: width * 0.055, weight: .semibold, design: .rounded))
+                                .tracking(width * 0.015)
+                                .foregroundColor(Color.white.opacity(0.18))
+                                .offset(x: 0.5, y: 0.5)
+
+                            Text(notebook.title.uppercased())
+                                .font(.system(size: width * 0.055, weight: .semibold, design: .rounded))
+                                .tracking(width * 0.015)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(hex: "D4AF6A").opacity(0.45),
+                                            Color(hex: "F0D890").opacity(0.55),
+                                            Color(hex: "C9A050").opacity(0.40)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                    }
+                    .offset(x: width * 0.03)
+                    .padding(.bottom, height * 0.09)
+                }
+                .frame(width: width, height: height)
+
+                // Cover art
+                if notebook.hasCoverArt {
+                    PaperDemoCoverArt()
+                        .frame(width: width - 30, height: height - 40)
+                }
+
+                // Page edges
+                HStack {
+                    Spacer()
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 14,
+                        topTrailingRadius: 14
+                    )
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(hex: "F5F3EE"),
+                                Color(hex: "EDEAE3")
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 4, height: height * 0.86)
+                }
+                .frame(width: width, height: height)
             }
-            .frame(width: width, height: height)
         }
     }
 }
