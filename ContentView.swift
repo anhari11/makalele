@@ -40,30 +40,13 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Notebook Title
-                    VStack(spacing: geometry.size.width > 500 ? 12 : 8) {
-                        Text(notebooks[selectedIndex].title)
-                            .font(.system(size: geometry.size.width > 500 ? 42 : 32, weight: .bold, design: .serif))
-                            .foregroundColor(Color(hex: "2D2D2D"))
-
-                        HStack(spacing: 6) {
-                            Image(systemName: "pencil.and.outline")
-                                .font(.system(size: geometry.size.width > 500 ? 18 : 14))
-                            Text("\(notebooks[selectedIndex].pageCount) \(notebooks[selectedIndex].pageCount == 1 ? "Page" : "Pages")")
-                                .font(.system(size: geometry.size.width > 500 ? 20 : 16, weight: .medium))
-                        }
-                        .foregroundColor(Color(hex: "888888"))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, geometry.size.width > 500 ? 50 : 30)
-                    .animation(.smooth(duration: 0.4), value: selectedIndex)
 
                     Spacer()
 
                     // Aanhari x and Share with friends - aligned to book edges
                     HStack {
                         Button(action: {}) {
-                            HStack(spacing: 4) {
+                            HStack(spacing: 2) {
                                 Text("aanhari")
                                     .foregroundStyle(Color.black)
                                     .font(.system(size: 17))
@@ -91,7 +74,9 @@ struct ContentView: View {
                         }
                     }
                     .frame(width: geometry.size.width * 0.48)
-           
+                    .offset(x: dragOffset)
+                    .animation(.smooth(duration: 0.5), value: selectedIndex)
+                    .animation(.smooth(duration: 0.15), value: dragOffset)
 
                     // Notebook Carousel
                     BookCarousel(
@@ -162,22 +147,22 @@ struct ContentView: View {
                     
                     Text("Share your book, ")
                     
-                    Button(action: {}) {
-                        HStack(spacing: 0) {
-                            Text("🔗 memorly.aanhari/")
-                                .foregroundStyle(Color.black)
-                                .font(.system(size: 27))
+                    // Button(action: {}) {
+                       // HStack(spacing: 0) {
+                         //   Text("🔗 memorly.aanhari/")
+                           //     .foregroundStyle(Color.black)
+                             //   .font(.system(size: 27))
                             
-                            Text("maldives2025")
-                                .foregroundStyle(Color(hex: "#666467"))
-                                .font(.system(size: 25))
-                        }
-                    }
-                    .padding(.horizontal, 50)
-                    .padding(.vertical, 5)
-                    .background(Color(hex: "#edebed"))
+                           // Text("maldives2025")
+                             //   .foregroundStyle(Color(hex: "#666467"))
+                               // .font(.system(size: 25))
+                        //}
+                    //}
+                    //.padding(.horizontal, 50)
+                    //.padding(.vertical, 5)
+                    //.background(Color(hex: "#edebed"))
                 
-                    .padding(.bottom, 30) // Add bottom padding to lift it from the edge
+                    //.padding(.bottom, 30) // Add bottom padding to lift it from the edge
                 }
             }
         }
