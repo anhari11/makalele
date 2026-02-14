@@ -24,9 +24,9 @@ struct Notebook: Identifiable {
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-        Notebook(title: "Personal", pageCount: 24, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: ""),
-        Notebook(title: "Journal", pageCount: 1, coverColor: Color(hex: "D4705A"), spineColor: Color(hex: "A84535"), pageEdgeColor: Color(hex: "C75540"), hasCoverArt: false, textureURL: ""),
-        Notebook(title: "Ideas", pageCount: 8, coverColor: Color(hex: "B5AE8A"), spineColor: Color(hex: "D4B830"), pageEdgeColor: Color(hex: "D4B830"), hasCoverArt: false, textureURL: "")
+        Notebook(title: "Maldives 2025 🌴", pageCount: 24, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: ""),
+        Notebook(title: "Journal 🔥", pageCount: 1, coverColor: Color(hex: "D4705A"), spineColor: Color(hex: "A84535"), pageEdgeColor: Color(hex: "C75540"), hasCoverArt: false, textureURL: ""),
+        Notebook(title: "Ideas 🌊", pageCount: 8, coverColor: Color(hex: "B5AE8A"), spineColor: Color(hex: "D4B830"), pageEdgeColor: Color(hex: "D4B830"), hasCoverArt: false, textureURL: "")
     ]
     @State private var selectedIndex: Int = 1
     @State private var showOnboarding: Bool = true
@@ -35,20 +35,16 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background - muted purple like Paper app
-                Color(hex: "7B7394")
+                // Background
+                Color.white
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Header
-                    HeaderView()
-                        .padding(.top, 10)
-
                     // Notebook Title
                     VStack(spacing: geometry.size.width > 500 ? 12 : 8) {
                         Text(notebooks[selectedIndex].title)
                             .font(.system(size: geometry.size.width > 500 ? 42 : 32, weight: .bold, design: .serif))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color(hex: "2D2D2D"))
 
                         HStack(spacing: 6) {
                             Image(systemName: "pencil.and.outline")
@@ -56,13 +52,64 @@ struct ContentView: View {
                             Text("\(notebooks[selectedIndex].pageCount) \(notebooks[selectedIndex].pageCount == 1 ? "Page" : "Pages")")
                                 .font(.system(size: geometry.size.width > 500 ? 20 : 16, weight: .medium))
                         }
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(Color(hex: "888888"))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, geometry.size.width > 500 ? 50 : 30)
                     .animation(.smooth(duration: 0.4), value: selectedIndex)
 
                     Spacer()
+                    
+                    HStack{
+                        
+                        
+                        Button(action: {}) {
+                            HStack(spacing: 0) {
+                                Text("aanhari")
+                                    .foregroundStyle(Color.black)
+                                    .font(.system(size: 17))
+                                
+                                    .fontWeight(.bold)
+                                
+                            
+                            }
+                            Image(systemName: "xmark")
+                                .foregroundStyle(Color.black)
+                                
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 5)
+                        .background(Color(hex: "#edebed"))
+                    
+                        .padding(.bottom, 30) // Add bottom padding to lift it from the edge
+                        
+                        HStack {
+                            
+                            Image(systemName: "person.2.fill")
+                                .foregroundStyle(Color.black)
+                                .font(.system(size: 15, weight: .semibold))
+
+                        
+                            
+                            Text("Share with friends")
+                                .fontWeight(.bold)
+                                .font(.system(size: 15, weight: .semibold))
+                                
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+
+                            
+                            
+                            
+                            
+                            
+                            
+                            
+                        }
+                        
+                        
+                    }
 
                     // Notebook Carousel
                     BookCarousel(
@@ -73,23 +120,82 @@ struct ContentView: View {
                     )
                     .frame(height: geometry.size.width > 500 ? 560 : 440)
 
-                    Spacer()
+                    // Divider line with book name pill
+                    ZStack {
+                        // Full-width thin line
+                        Rectangle()
+                            .fill(Color(hex: "E0E0E0"))
+                            .frame(height: 1)
 
-                    // Bottom Action Bar
-                    BottomActionBar()
-                        .padding(.bottom, 16)
-
-                    // Onboarding Prompt
-                    if showOnboarding {
-                        OnboardingPrompt {
-                            withAnimation(.spring(response: 0.3)) {
-                                showOnboarding = false
+                        // Pill with book name
+                        HStack(spacing: 4) {
+                            Button(action: {}) {
+                                Text("10/03/2025")
+                                    .foregroundColor(.black)
+                                    .font(.system(size: 16))
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "#EFEFEF"))
+                            .cornerRadius(100)
+                            
+                            Text(",")
+                                .foregroundColor(.black)
+                                .font(.system(size: 16))
+                            
+                            Button(action: {}) {
+                                Text(notebooks[selectedIndex].title)
+                                    .foregroundColor(.black)
+                                    .font(.system(size: 16))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "#EFEFEF"))
+                            .cornerRadius(100)
+                            
+                            Text("by")
+                                .foregroundStyle(Color(hex: "#898988"))
+                            
+                            Text("@aanhari")
+                            
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(Color(hex: "999999"))
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 30)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color.white)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color(hex: "E0E0E0"), lineWidth: 1)
+                                )
+                        )
                     }
+                    .padding(.top, 12)
+                    .animation(.smooth(duration: 0.4), value: selectedIndex)
+
+                    Spacer()
+                    
+                    Text("Share your book, ")
+                    
+                    Button(action: {}) {
+                        HStack(spacing: 0) {
+                            Text("🔗 memorly.aanhari/")
+                                .foregroundStyle(Color.black)
+                                .font(.system(size: 27))
+                            
+                            Text("maldives2025")
+                                .foregroundStyle(Color(hex: "#666467"))
+                                .font(.system(size: 25))
+                        }
+                    }
+                    .padding(.horizontal, 50)
+                    .padding(.vertical, 5)
+                    .background(Color(hex: "#edebed"))
+                
+                    .padding(.bottom, 30) // Add bottom padding to lift it from the edge
                 }
             }
         }
@@ -117,7 +223,7 @@ struct HeaderView: View {
                 }
                 Text("Paper Store")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Color(hex: "2D2D2D"))
             }
 
             Spacer()
@@ -126,20 +232,20 @@ struct HeaderView: View {
                 CircleButton {
                     Text("¹₂³")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(Color(hex: "4A4A4A"))
                 }
 
                 CircleButton {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(Color(hex: "4A4A4A"))
                 }
 
                 CircleButton {
                     VStack(spacing: 4) {
                         ForEach(0..<3, id: \.self) { _ in
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.white)
+                                .fill(Color(hex: "4A4A4A"))
                                 .frame(width: 18, height: 2)
                         }
                     }
@@ -149,7 +255,6 @@ struct HeaderView: View {
         .padding(.horizontal, 20)
     }
 }
-
 
 struct CircleButton<Content: View>: View {
     let content: Content
@@ -169,7 +274,7 @@ struct CircleButton<Content: View>: View {
                 .frame(width: isIPad ? 60 : 44, height: isIPad ? 60 : 44)
                 .background(
                     Circle()
-                        .stroke(Color.white.opacity(0.35), lineWidth: 1.5)
+                        .stroke(Color(hex: "E0E0E0"), lineWidth: 1.5)
                 )
         }
     }
@@ -285,7 +390,6 @@ struct BookItem: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             BookCover(notebook: notebook, width: bookWidth, height: bookHeight)
-                .shadow(color: Color.black.opacity(isElevated ? 0.4 : 0.25), radius: isElevated ? 30 : 15, x: 5, y: isElevated ? 30 : 10)
 
             // Settings icon on selected book
             if isSelected {
@@ -341,12 +445,8 @@ struct BookShape: Shape {
         // Bottom edge → bottom-left
         path.addLine(to: CGPoint(x: r * 0.4, y: h))
 
-        // Left edge: concave arc inward (the spine recess makes the left bulge out slightly)
-        // We create a subtle outward arc on the left
-        path.addQuadCurve(
-            to: CGPoint(x: r * 0.4, y: 0),
-            control: CGPoint(x: -w * 0.018, y: h / 2)
-        )
+        // Left edge: straight vertical line
+        path.addLine(to: CGPoint(x: r * 0.4, y: 0))
 
         path.closeSubpath()
         return path
@@ -392,44 +492,8 @@ struct BookCover: View {
                 endRadius: max(size.width, size.height) * 0.9
             ))
 
-            // ── 3. Recessed spine inset strip (darker orange, concave) ──
-            let insetRect = CGRect(x: 0, y: 0, width: groove2X + 6, height: size.height)
-            let insetPath = Path(insetRect).intersection(bookPath)
-
-            // Fill inset with darker cover color
-            context.fill(insetPath, with: .color(notebook.spineColor))
-
-            // Concave shading: center of inset is darkest, edges catch light
-            let concaveGrad = Gradient(stops: [
-                .init(color: Color.white.opacity(0.08), location: 0),      // left highlight
-                .init(color: Color.clear, location: 0.15),
-                .init(color: Color.black.opacity(0.10), location: 0.35),   // darken toward center
-                .init(color: Color.black.opacity(0.14), location: 0.5),    // deepest point
-                .init(color: Color.black.opacity(0.08), location: 0.65),
-                .init(color: Color.clear, location: 0.82),
-                .init(color: Color.white.opacity(0.06), location: 1.0)     // right raised highlight
-            ])
-            context.fill(insetPath, with: .linearGradient(
-                concaveGrad,
-                startPoint: CGPoint(x: 0, y: rect.midY),
-                endPoint: CGPoint(x: groove2X + 6, y: rect.midY)
-            ))
-
-            // ── 4. Inner shadow along left inner edge of inset ──
-            let leftInnerShadow = CGRect(x: 1, y: 0, width: 4, height: size.height)
-            let leftISPath = Path(leftInnerShadow).intersection(bookPath)
-            let leftISGrad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.12), location: 0),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(leftISPath, with: .linearGradient(
-                leftISGrad,
-                startPoint: CGPoint(x: 1, y: rect.midY),
-                endPoint: CGPoint(x: 5, y: rect.midY)
-            ))
-
-            // ── 5. Primary groove line (thin dark line near left edge) ──
-            let g1Rect = CGRect(x: groove1X - 1.5, y: 0, width: 3, height: size.height)
+            // ── 3. Primary groove line (wider, near left edge) ──
+            let g1Rect = CGRect(x: groove1X - 3, y: 0, width: 7, height: size.height)
             let g1Path = Path(g1Rect).intersection(bookPath)
             let g1Grad = Gradient(stops: [
                 .init(color: Color.black.opacity(0.22), location: 0),
