@@ -59,57 +59,39 @@ struct ContentView: View {
                     .animation(.smooth(duration: 0.4), value: selectedIndex)
 
                     Spacer()
-                    
-                    HStack{
-                        
-                        
+
+                    // Aanhari x and Share with friends - aligned to book edges
+                    HStack {
                         Button(action: {}) {
-                            HStack(spacing: 0) {
+                            HStack(spacing: 4) {
                                 Text("aanhari")
                                     .foregroundStyle(Color.black)
                                     .font(.system(size: 17))
-                                
                                     .fontWeight(.bold)
-                                
-                            
+                                Image(systemName: "xmark")
+                                    .foregroundStyle(Color.black)
                             }
-                            Image(systemName: "xmark")
-                                .foregroundStyle(Color.black)
-                                
                         }
                         .padding(.horizontal, 7)
                         .padding(.vertical, 5)
                         .background(Color(hex: "#edebed"))
-                    
-                        .padding(.bottom, 30) // Add bottom padding to lift it from the edge
-                        
-                        HStack {
-                            
+                        .cornerRadius(1)
+
+                        Spacer()
+
+                        HStack(spacing: 4) {
                             Image(systemName: "person.2.fill")
                                 .foregroundStyle(Color.black)
                                 .font(.system(size: 15, weight: .semibold))
-
-                        
-                            
                             Text("Share with friends")
                                 .fontWeight(.bold)
                                 .font(.system(size: 15, weight: .semibold))
-                                
-                            
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 14, weight: .semibold))
-
-                            
-                            
-                            
-                            
-                            
-                            
-                            
                         }
-                        
-                        
                     }
+                    .frame(width: geometry.size.width * 0.48)
+           
 
                     // Notebook Carousel
                     BookCarousel(
@@ -137,7 +119,7 @@ struct ContentView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 2)
                             .background(Color(hex: "#EFEFEF"))
-                            .cornerRadius(100)
+                        
                             
                             Text(",")
                                 .foregroundColor(.black)
@@ -151,7 +133,7 @@ struct ContentView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 2)
                             .background(Color(hex: "#EFEFEF"))
-                            .cornerRadius(100)
+                           
                             
                             Text("by")
                                 .foregroundStyle(Color(hex: "#898988"))
