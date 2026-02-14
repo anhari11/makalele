@@ -41,13 +41,51 @@ struct ContentView: View {
 
                 VStack(spacing: 0) {
 
+                    // Top navigation bar
+                    HStack {
+                        // Hamburger menu button
+                        Button(action: {}) {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundColor(.black)
+                        }
+
+                        Spacer()
+
+                        // Search bar (iOS native style)
+                       // HStack(spacing: 8) {
+                         //   Image(systemName: "magnifyingglass")
+                           //     .font(.system(size: 15, weight: .medium))
+                             //   .foregroundColor(Color(hex: "#6a717a"))
+                            //Text("Search for your memorly")
+                              //  .font(.system(size: 16))
+                                //.foregroundColor(Color(hex: "#6a717a"))
+                        //}
+                        //.padding(.horizontal, 10)
+                        //.padding(.vertical, 8)
+                        //.background(Color(hex: "#f3f4f6"))
+                        //.cornerRadius(7)
+
+                        Spacer()
+
+                        // Profile picture
+                        Image("profile")
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 34, height: 34)
+                            .clipShape(Circle())
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+
                     Spacer()
 
                     // Aanhari x and Share with friends - aligned to book edges
                     HStack {
                         Button(action: {}) {
                             HStack(spacing: 2) {
-                                Text("aanhari")
+                                Text("@aanhari")
                                     .foregroundStyle(Color.black)
                                     .font(.system(size: 17))
                                     .fontWeight(.bold)
@@ -145,7 +183,7 @@ struct ContentView: View {
 
                     Spacer()
                     
-                    Text("Share your book, ")
+             
                     
                     // Button(action: {}) {
                        // HStack(spacing: 0) {
@@ -358,19 +396,8 @@ struct BookItem: View {
         ZStack(alignment: .topTrailing) {
             BookCover(notebook: notebook, width: bookWidth, height: bookHeight)
 
-            // Settings icon on selected book
-            if isSelected {
-                ZStack {
-                    Circle()
-                        .fill(Color.black.opacity(0.45))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
-                }
-                .offset(x: -12, y: 12)
-                .transition(.opacity)
-            }
+          
+            
         }
         .scaleEffect(scale)
         .offset(y: elevation)
@@ -548,6 +575,43 @@ struct BookCover: View {
 
             // ── 11. Very subtle edge stroke ──
             context.stroke(bookPath, with: .color(Color.black.opacity(0.06)), lineWidth: 0.5)
+
+            // ── 12. Deep pressed title text at bottom of book (same technique as groove lines) ──
+            let cleanTitle = String(notebook.title.unicodeScalars.filter { !$0.properties.isEmojiPresentation }).trimmingCharacters(in: .whitespaces)
+            let titleFont: Font = .system(size: size.width * 0.09, weight: .medium)
+
+            // Measure the title to position it
+            let measureResolved = context.resolve(Text(cleanTitle).font(titleFont).foregroundColor(.black))
+            let titleSize = measureResolved.measure(in: CGSize(width: size.width * 0.75, height: size.height))
+            let titleCenter = CGPoint(
+                x: (size.width + groove2X + 4) / 2,
+                y: size.height - titleSize.height / 2 - size.height * 0.06
+            )
+
+            // Layer 1: Dark shadow on bottom-right edge of each letter (pressed-in shadow, like groove dark side)
+            var darkCtx = context
+            darkCtx.opacity = 1.0
+            let darkResolved = darkCtx.resolve(Text(cleanTitle).font(titleFont).foregroundColor(Color.black.opacity(0.28)))
+            darkCtx.draw(darkResolved, at: CGPoint(x: titleCenter.x + 1.0, y: titleCenter.y + 1.5), anchor: .center)
+
+            // Layer 2: Deeper dark center of the groove (the bottom of the pressed letter)
+            var depthCtx = context
+            depthCtx.opacity = 1.0
+            let depthResolved = depthCtx.resolve(Text(cleanTitle).font(titleFont).foregroundColor(Color.black.opacity(0.22)))
+            depthCtx.draw(depthResolved, at: CGPoint(x: titleCenter.x, y: titleCenter.y), anchor: .center)
+
+            // Layer 3: Light highlight on top-left edge (light catching the far rim, like groove white side)
+            var lightCtx = context
+            lightCtx.opacity = 1.0
+            let lightResolved = lightCtx.resolve(Text(cleanTitle).font(titleFont).foregroundColor(Color.white.opacity(0.14)))
+            lightCtx.draw(lightResolved, at: CGPoint(x: titleCenter.x - 0.8, y: titleCenter.y - 1.0), anchor: .center)
+
+            // Layer 4: Ambient occlusion bleed around the letters (soft dark halo)
+            var aoCtx = context
+            aoCtx.opacity = 1.0
+            aoCtx.addFilter(.blur(radius: 1.5))
+            let aoResolved = aoCtx.resolve(Text(cleanTitle).font(titleFont).foregroundColor(Color.black.opacity(0.10)))
+            aoCtx.draw(aoResolved, at: CGPoint(x: titleCenter.x, y: titleCenter.y + 0.5), anchor: .center)
         }
         .frame(width: width, height: height)
     }
