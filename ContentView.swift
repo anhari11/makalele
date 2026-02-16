@@ -18,19 +18,47 @@ struct Notebook: Identifiable {
     let pageEdgeColor: Color
     let hasCoverArt: Bool
     let textureURL: String
+    let creationDate: Date
 }
 
 // MARK: - Main Content View
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-        Notebook(title: "Maldives 2025 🌴", pageCount: 24, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: ""),
-        Notebook(title: "Journal 🔥", pageCount: 1, coverColor: Color(hex: "D4705A"), spineColor: Color(hex: "A84535"), pageEdgeColor: Color(hex: "C75540"), hasCoverArt: false, textureURL: ""),
-        Notebook(title: "Ideas 🌊", pageCount: 8, coverColor: Color(hex: "B5AE8A"), spineColor: Color(hex: "D4B830"), pageEdgeColor: Color(hex: "D4B830"), hasCoverArt: false, textureURL: "")
+        Notebook(title: "Maldives 2025 🌴", pageCount: 24, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: "", creationDate: {
+            var c = DateComponents(); c.year = 2025; c.month = 3; c.day = 14
+            return Calendar.current.date(from: c)!
+        }()),
+        Notebook(title: "Journal", pageCount: 1, coverColor: Color(hex: "D4705A"), spineColor: Color(hex: "A84535"), pageEdgeColor: Color(hex: "C75540"), hasCoverArt: false, textureURL: "", creationDate: {
+            var c = DateComponents(); c.year = 2024; c.month = 11; c.day = 2
+            return Calendar.current.date(from: c)!
+        }()),
+        Notebook(title: "Ideas", pageCount: 8, coverColor: Color(hex: "B5AE8A"), spineColor: Color(hex: "D4B830"), pageEdgeColor: Color(hex: "D4B830"), hasCoverArt: false, textureURL: "", creationDate: {
+            var c = DateComponents(); c.year = 2026; c.month = 1; c.day = 8
+            return Calendar.current.date(from: c)!
+        }())
     ]
     @State private var selectedIndex: Int = 1
     @State private var showOnboarding: Bool = true
     @State private var dragOffset: CGFloat = 0
+
+    private var formattedCreationDate: String {
+        let date = notebooks[selectedIndex].creationDate
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        let dayOfWeek = formatter.string(from: date)
+        let day = Calendar.current.component(.day, from: date)
+        formatter.dateFormat = "MMMM yyyy"
+        let monthYear = formatter.string(from: date)
+        let suffix: String
+        switch day {
+        case 1, 21, 31: suffix = "st"
+        case 2, 22: suffix = "nd"
+        case 3, 23: suffix = "rd"
+        default: suffix = "th"
+        }
+        return "\(dayOfWeek), \(day)\(suffix) \(monthYear)"
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -49,8 +77,24 @@ struct ContentView: View {
                                 .font(.system(size: 22, weight: .medium))
                                 .foregroundColor(.black)
                         }
-
                         Spacer()
+                        
+                        
+                        HStack {
+                            
+                            Text("Private")
+                                .fontWeight(.bold)
+                            Image(systemName: "chevron.down")
+                                    
+                                      .foregroundColor(.black)
+                                      .fontWeight(.semibold)
+                            
+                        }
+                        .padding(.vertical,5)
+                        .padding(.horizontal,20)
+                            .background(Color(hex: "#EFEFEF"))
+                        
+                    
 
                         // Search bar (iOS native style)
                        // HStack(spacing: 8) {
@@ -67,6 +111,10 @@ struct ContentView: View {
                         //.cornerRadius(7)
 
                         Spacer()
+                        
+                        HStack {
+                            
+                        }
 
                         // Profile picture
                         Image("profile")
@@ -74,44 +122,82 @@ struct ContentView: View {
                             .scaledToFill()
                             .frame(width: 34, height: 34)
                             .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(Color(hex: "#efefef"), lineWidth: 2)
+                                    .frame(width: 40, height: 40)
+                            )
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
 
                     Spacer()
+                    
 
                     // Aanhari x and Share with friends - aligned to book edges
-                    HStack {
-                        Button(action: {}) {
-                            HStack(spacing: 2) {
-                                Text("@aanhari")
-                                    .foregroundStyle(Color.black)
-                                    .font(.system(size: 17))
-                                    .fontWeight(.bold)
-                                Image(systemName: "xmark")
-                                    .foregroundStyle(Color.black)
+                    Group {
+                        if min(geometry.size.width, geometry.size.height) > 500 {
+                            HStack {
+                                Button(action: {}) {
+                                    HStack(spacing: 2) {
+                                        Text("aanhari")
+                                            .foregroundStyle(Color.black)
+                                            .font(.system(size: 17))
+                                            .fontWeight(.bold)
+                                        Image(systemName: "xmark")
+                                            .foregroundStyle(Color.black)
+                                    }
+                                }
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 5)
+                                .background(Color(hex: "#edebed"))
+                                .cornerRadius(1)
+
+                                Spacer()
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "person.2.fill")
+                                        .foregroundStyle(Color.black)
+                                        .font(.system(size: 15, weight: .semibold))
+                                    Text("Share with friends")
+                                        .fontWeight(.bold)
+                                        .font(.system(size: 15, weight: .semibold))
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                }
+                            }
+                            .frame(width: min(geometry.size.width, geometry.size.height) * 0.48)
+                        } else {
+                            VStack(spacing: 8) {
+                                Button(action: {}) {
+                                    HStack(spacing: 2) {
+                                        Text("@aanhari")
+                                            .foregroundStyle(Color.black)
+                                            .font(.system(size: 17))
+                                            .fontWeight(.bold)
+                                        Image(systemName: "xmark")
+                                            .foregroundStyle(Color.black)
+                                    }
+                                }
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 5)
+                                .background(Color(hex: "#edebed"))
+                                .cornerRadius(1)
+
+                                HStack(spacing: 4) {
+                                    Image(systemName: "person.2.fill")
+                                        .foregroundStyle(Color.black)
+                                        .font(.system(size: 15, weight: .semibold))
+                                    Text("Share with friends")
+                                        .fontWeight(.bold)
+                                        .font(.system(size: 15, weight: .semibold))
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                }
                             }
                         }
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 5)
-                        .background(Color(hex: "#edebed"))
-                        .cornerRadius(1)
-
-                        Spacer()
-
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.2.fill")
-                                .foregroundStyle(Color.black)
-                                .font(.system(size: 15, weight: .semibold))
-                            Text("Share with friends")
-                                .fontWeight(.bold)
-                                .font(.system(size: 15, weight: .semibold))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
                     }
-                    .frame(width: geometry.size.width * 0.48)
                     .offset(x: dragOffset)
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
@@ -121,10 +207,38 @@ struct ContentView: View {
                         notebooks: notebooks,
                         selectedIndex: $selectedIndex,
                         dragOffset: $dragOffset,
-                        screenWidth: geometry.size.width
+                        screenWidth: min(geometry.size.width, geometry.size.height)
                     )
-                    .frame(height: geometry.size.width > 500 ? 560 : 440)
+                    .frame(height: min(geometry.size.width, geometry.size.height) > 500 ? 532 : 418)
+                    
+                    
+                    HStack {
+                        
+                        HStack (spacing: 5) {
+                            Text(notebooks[selectedIndex].title)
+                                .fontWeight(.semibold)
+                            
+                        }
+                        .padding(.vertical,6)
+                        .padding(.horizontal,30)
+                            .background(Color(hex: "#EFEFEF"))
 
+                        
+                        
+                        HStack {
+                            Image(systemName: "ellipsis")
+                                      .font(.title)
+                                      .foregroundColor(.black)
+                            
+                        }
+                        .padding(.vertical,11)
+                        .padding(.horizontal,20)
+                            .background(Color(hex: "#EFEFEF"))
+
+                        
+                    }
+                    
+                   
                     // Divider line with book name pill
                     ZStack {
                         // Full-width thin line
@@ -135,7 +249,7 @@ struct ContentView: View {
                         // Pill with book name
                         HStack(spacing: 4) {
                             Button(action: {}) {
-                                Text("10/03/2025")
+                                Text(formattedCreationDate)
                                     .foregroundColor(.black)
                                     .font(.system(size: 16))
                             }
@@ -144,36 +258,33 @@ struct ContentView: View {
                             .background(Color(hex: "#EFEFEF"))
                         
                             
-                            Text(",")
-                                .foregroundColor(.black)
-                                .font(.system(size: 16))
+                            //Text(",")
+                              //  .foregroundColor(.black)
+                                //.font(.system(size: 16))
                             
-                            Button(action: {}) {
-                                Text(notebooks[selectedIndex].title)
-                                    .foregroundColor(.black)
-                                    .font(.system(size: 16))
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 2)
-                            .background(Color(hex: "#EFEFEF"))
+                          //  Button(action: {}) {
+                            //    Text(notebooks[selectedIndex].title)
+                              //      .foregroundColor(.black)
+                                //    .font(.system(size: 16))
+                            //}
+                            //.padding(.horizontal, 10)
+                            //.padding(.vertical, 2)
+                            ///.background(Color(hex: "#EFEFEF"))
                            
                             
                             Text("by")
                                 .foregroundStyle(Color(hex: "#898988"))
                             
                             Text("@aanhari")
-                            
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(Color(hex: "999999"))
+                         
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(
-                            Capsule()
+                            RoundedRectangle(cornerRadius: 4)
                                 .fill(Color.white)
                                 .overlay(
-                                    Capsule()
+                                    RoundedRectangle(cornerRadius: 4)
                                         .stroke(Color(hex: "E0E0E0"), lineWidth: 1)
                                 )
                         )
@@ -182,6 +293,16 @@ struct ContentView: View {
                     .animation(.smooth(duration: 0.4), value: selectedIndex)
 
                     Spacer()
+                    
+                    
+                        
+                       
+               
+               
+                       
+                        
+                        
+                    
                     
              
                     
@@ -299,11 +420,11 @@ struct BookCarousel: View {
     }
 
     private var bookWidth: CGFloat {
-        screenWidth * 0.48
+        isIPad ? screenWidth * 0.48 : screenWidth * 0.58
     }
 
     private var bookHeight: CGFloat {
-        isIPad ? 480 : 360
+        isIPad ? 456 : 342
     }
 
     private var bookSpacing: CGFloat {
@@ -346,6 +467,7 @@ struct BookCarousel: View {
                         let threshold: CGFloat = 50
                         let velocity = value.predictedEndTranslation.width
 
+                        let oldIndex = selectedIndex
                         withAnimation(.smooth(duration: 0.5)) {
                             if value.translation.width < -threshold || velocity < -200 {
                                 if selectedIndex < notebooks.count - 1 {
@@ -357,6 +479,9 @@ struct BookCarousel: View {
                                 }
                             }
                             dragOffset = 0
+                        }
+                        if selectedIndex != oldIndex {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         }
 
                         // Delay the lift animation slightly for smoother feel
