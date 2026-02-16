@@ -68,6 +68,14 @@ struct ContentView: View {
                 Color.white
                     .ignoresSafeArea()
 
+                // Background overlay: book color when opening
+                if let openIndex = openBookIndex {
+                    notebooks[openIndex].coverColor
+                        .opacity(Double(openBookProgress) * 0.3)
+                        .ignoresSafeArea()
+                        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
+                }
+
                 VStack(spacing: 0) {
 
                     // Top navigation bar
@@ -106,6 +114,7 @@ struct ContentView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
+                    .opacity(1 - Double(openBookProgress))
 
                     Spacer()
 
@@ -175,6 +184,7 @@ struct ContentView: View {
                     .offset(x: dragOffset)
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
+                    .opacity(1 - Double(openBookProgress))
 
                     // Notebook Carousel
                     BookCarousel(
@@ -209,6 +219,7 @@ struct ContentView: View {
                         .padding(.horizontal, 20)
                         .background(Color(hex: "#EFEFEF"))
                     }
+                    .opacity(1 - Double(openBookProgress))
 
                     // Divider line with book name pill
                     ZStack {
@@ -244,9 +255,11 @@ struct ContentView: View {
                     }
                     .padding(.top, 12)
                     .animation(.smooth(duration: 0.4), value: selectedIndex)
+                    .opacity(1 - Double(openBookProgress))
 
                     Spacer()
                 }
+                .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                 .allowsHitTesting(openBookIndex == nil)
 
                 // Tap anywhere to close the open book
@@ -410,26 +423,29 @@ struct BookCarousel: View {
 
             HStack(alignment: .bottom, spacing: bookSpacing) {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
+                    let isOpeningThis = openBookIndex == index
                     BookItem(
                         notebook: notebook,
                         isSelected: index == selectedIndex,
                         isDragging: isDragging,
                         bookWidth: bookWidth,
                         bookHeight: bookHeight,
-                        isOpening: openBookIndex == index,
-                        openProgress: openBookIndex == index ? openBookProgress : 0
+                        isOpening: isOpeningThis,
+                        openProgress: isOpeningThis ? openBookProgress : 0
                     )
+                    .opacity(openBookIndex == nil || isOpeningThis ? 1 : 1 - Double(openBookProgress))
                     .contentShape(Rectangle())
                     .onTapGesture {
                         onBookTap(index)
                     }
-                    .zIndex(openBookIndex == index ? 10 : 0)
+                    .zIndex(isOpeningThis ? 10 : 0)
                 }
             }
             .frame(height: geometry.size.height, alignment: .bottom)
             .offset(x: offset)
             .animation(.smooth(duration: 0.5), value: selectedIndex)
             .animation(.smooth(duration: 0.15), value: dragOffset)
+            .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
             .gesture(
                 DragGesture(minimumDistance: 5)
                     .onChanged { value in
@@ -500,6 +516,14 @@ struct BookItem: View {
         Double(openProgress) * -160
     }
 
+    /// Shift right so the full visual (flipped cover on left + pages on right)
+    /// is centered, not just the pages alone
+    private var centeringOffset: CGFloat {
+        // The cover extends ~bookWidth * sin(20°) ≈ 0.34 to the left when open
+        // Shift right by half that to center the combined visual
+        openProgress * (bookWidth * 0.35)
+    }
+
     var body: some View {
         ZStack {
             // Pages revealed behind the cover when opening
@@ -538,10 +562,12 @@ struct BookItem: View {
                 )
         }
         .frame(width: bookWidth, height: bookHeight)
+        .offset(x: centeringOffset)
         .scaleEffect(scale)
         .offset(y: elevation)
         .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isSelected)
         .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isDragging)
+        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openProgress)
     }
 }
 
