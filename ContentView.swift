@@ -42,9 +42,7 @@ struct ContentView: View {
     @State private var showOnboarding: Bool = true
     @State private var dragOffset: CGFloat = 0
     @State private var isBookOpen: Bool = false
-    @State private var showSpread: Bool = false
     @State private var coverAngle: Double = 0 // 0=closed, -180=fully open
-    @State private var uiFadeOut: Double = 1
 
     private var formattedCreationDate: String {
         let date = notebooks[selectedIndex].creationDate
@@ -67,13 +65,8 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background - transitions from white to dark
                 Color.white
                     .ignoresSafeArea()
-
-                Color(hex: "3D4555")
-                    .ignoresSafeArea()
-                    .opacity(1 - uiFadeOut)
 
                 VStack(spacing: 0) {
 
@@ -113,7 +106,6 @@ struct ContentView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
-                    .opacity(uiFadeOut)
 
                     Spacer()
 
@@ -181,7 +173,6 @@ struct ContentView: View {
                         }
                     }
                     .offset(x: dragOffset)
-                    .opacity(uiFadeOut)
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
 
@@ -190,9 +181,15 @@ struct ContentView: View {
                         notebooks: notebooks,
                         selectedIndex: $selectedIndex,
                         dragOffset: $dragOffset,
+                        coverAngle: coverAngle,
+                        isBookOpen: isBookOpen,
                         screenWidth: min(geometry.size.width, geometry.size.height),
                         onBookTap: {
-                            openBook()
+                            if isBookOpen {
+                                closeBook()
+                            } else {
+                                openBook()
+                            }
                         }
                     )
                     .frame(height: min(geometry.size.width, geometry.size.height) > 500 ? 532 : 418)
@@ -216,7 +213,6 @@ struct ContentView: View {
                         .padding(.horizontal, 20)
                         .background(Color(hex: "#EFEFEF"))
                     }
-                    .opacity(uiFadeOut)
 
                     // Divider line with book name pill
                     ZStack {
@@ -251,32 +247,17 @@ struct ContentView: View {
                         )
                     }
                     .padding(.top, 12)
-                    .opacity(uiFadeOut)
                     .animation(.smooth(duration: 0.4), value: selectedIndex)
 
                     Spacer()
                 }
 
-                // Open book spread overlay
-                if showSpread {
-                    OpenBookSpread(notebook: notebooks[selectedIndex], coverAngle: coverAngle)
-                        .transition(.opacity)
-                        .onTapGesture {
-                            closeBook()
-                        }
-                }
             }
         }
     }
 
     private func openBook() {
         isBookOpen = true
-        coverAngle = 0
-        showSpread = true
-
-        withAnimation(.easeOut(duration: 0.3)) {
-            uiFadeOut = 0
-        }
         withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
             coverAngle = -180
         }
@@ -286,12 +267,7 @@ struct ContentView: View {
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             coverAngle = 0
         }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                uiFadeOut = 1
-                showSpread = false
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isBookOpen = false
         }
     }
@@ -380,6 +356,8 @@ struct BookCarousel: View {
     let notebooks: [Notebook]
     @Binding var selectedIndex: Int
     @Binding var dragOffset: CGFloat
+    var coverAngle: Double = 0
+    var isBookOpen: Bool = false
     let screenWidth: CGFloat
     var onBookTap: () -> Void = {}
 
@@ -414,6 +392,7 @@ struct BookCarousel: View {
                         isDragging: isDragging,
                         bookWidth: bookWidth,
                         bookHeight: bookHeight,
+                        coverAngle: index == selectedIndex ? coverAngle : 0,
                         onTap: index == selectedIndex ? onBookTap : {}
                     )
                 }
@@ -422,7 +401,7 @@ struct BookCarousel: View {
             .offset(x: offset)
             .animation(.smooth(duration: 0.5), value: selectedIndex)
             .animation(.smooth(duration: 0.15), value: dragOffset)
-            .gesture(
+            .gesture(isBookOpen ? nil :
                 DragGesture(minimumDistance: 5)
                     .onChanged { value in
                         if !isDragging {
@@ -472,10 +451,11 @@ struct BookItem: View {
     let isDragging: Bool
     let bookWidth: CGFloat
     let bookHeight: CGFloat
+    var coverAngle: Double = 0
     var onTap: () -> Void = {}
 
     private var isElevated: Bool {
-        isSelected && !isDragging
+        isSelected && !isDragging && coverAngle == 0
     }
 
     private var elevation: CGFloat {
@@ -486,10 +466,116 @@ struct BookItem: View {
         isSelected ? 1.0 : 0.92
     }
 
+    private var flipProgress: Double {
+        min(max(-coverAngle / 180, 0), 1)
+    }
+
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            BookCover(notebook: notebook, width: bookWidth, height: bookHeight)
+        let spineW: CGFloat = 12
+
+        ZStack(alignment: .leading) {
+            // Left page (portrait with rotated title) - appears to the left
+            ZStack {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 6,
+                    bottomLeadingRadius: 6,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 0
+                )
+                .fill(Color(hex: "FAFAF7"))
+
+                Text(notebook.title)
+                    .font(.system(size: bookWidth * 0.06, weight: .semibold, design: .serif))
+                    .foregroundColor(notebook.coverColor.opacity(0.55))
+                    .rotationEffect(.degrees(-90))
+                    .fixedSize()
+
+                // Inner shadow near spine
+                HStack {
+                    Spacer()
+                    LinearGradient(
+                        colors: [Color.clear, Color.black.opacity(0.07)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 14)
+                }
+            }
+            .frame(width: bookWidth, height: bookHeight)
+            .offset(x: -(bookWidth + spineW))
+            .opacity(flipProgress)
+
+            // Spine
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            notebook.spineColor.opacity(0.7),
+                            notebook.spineColor,
+                            notebook.spineColor.opacity(0.9),
+                            notebook.spineColor.opacity(0.7)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: spineW, height: bookHeight)
+                .offset(x: -spineW)
+                .opacity(flipProgress)
+
+            // White page underneath (revealed when cover flips)
+            ZStack(alignment: .leading) {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 6,
+                    topTrailingRadius: 6
+                )
+                .fill(Color.white)
+
+                LinearGradient(
+                    colors: [Color.black.opacity(0.07), Color.clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 12)
+            }
+            .frame(width: bookWidth, height: bookHeight)
+
+            // Flipping cover
+            ZStack {
+                // Front face: book cover
+                BookCover(notebook: notebook, width: bookWidth, height: bookHeight)
+                    .opacity(coverAngle > -90 ? 1 : 0)
+
+                // Back face: inside of cover
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color(hex: "F0EDE8"))
+
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.05), Color.clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 10)
+                }
+                .frame(width: bookWidth, height: bookHeight)
+                .scaleEffect(x: -1)
+                .opacity(coverAngle <= -90 ? 1 : 0)
+            }
+            .frame(width: bookWidth, height: bookHeight)
+            .shadow(color: .black.opacity(0.1 * flipProgress), radius: 8, x: -4, y: 4)
+            .rotation3DEffect(
+                .degrees(coverAngle),
+                axis: (x: 0, y: 1, z: 0),
+                anchor: .leading,
+                perspective: 0.4
+            )
         }
+        .frame(width: bookWidth, height: bookHeight)
+        .compositingGroup()
+        .shadow(color: .black.opacity(coverAngle != 0 ? 0.15 : 0), radius: 16, x: 0, y: 10)
         .scaleEffect(scale)
         .offset(y: elevation)
         .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isSelected)
@@ -688,143 +774,6 @@ struct BookCover: View {
             aoCtx.draw(aoResolved2, at: CGPoint(x: titleCenter.x, y: titleCenter.y + 0.5), anchor: .center)
         }
         .frame(width: width, height: height)
-    }
-}
-
-// MARK: - Open Book Spread
-
-struct OpenBookSpread: View {
-    let notebook: Notebook
-    var coverAngle: Double = 0 // 0=closed, -180=fully open
-
-    private var flipProgress: Double {
-        min(max(-coverAngle / 180, 0), 1)
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            let shorter = min(geometry.size.width, geometry.size.height)
-            let pageW = shorter * 0.36
-            let pageH = pageW * 1.5
-            let spineW: CGFloat = 14
-
-            ZStack {
-                // Dimmed background
-                Color.black.opacity(0.35 * flipProgress)
-                    .ignoresSafeArea()
-
-                HStack(spacing: 0) {
-                    // Left page: portrait with rotated book title
-                    ZStack {
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: 6,
-                            bottomLeadingRadius: 6,
-                            bottomTrailingRadius: 0,
-                            topTrailingRadius: 0
-                        )
-                        .fill(Color(hex: "FAFAF7"))
-
-                        // Book name rotated vertically
-                        Text(notebook.title)
-                            .font(.system(size: pageW * 0.065, weight: .semibold, design: .serif))
-                            .foregroundColor(notebook.coverColor.opacity(0.55))
-                            .rotationEffect(.degrees(-90))
-                            .fixedSize()
-
-                        // Inner shadow near spine
-                        HStack {
-                            Spacer()
-                            LinearGradient(
-                                colors: [Color.clear, Color.black.opacity(0.07)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                            .frame(width: 14)
-                        }
-                    }
-                    .frame(width: pageW, height: pageH)
-                    .clipped()
-                    .opacity(flipProgress)
-
-                    // Spine
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    notebook.spineColor.opacity(0.7),
-                                    notebook.spineColor,
-                                    notebook.spineColor.opacity(0.9),
-                                    notebook.spineColor.opacity(0.7)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: spineW, height: pageH)
-                        .zIndex(1)
-
-                    // Right side: cover flips to reveal white page
-                    ZStack {
-                        // Underlying white page
-                        ZStack(alignment: .leading) {
-                            UnevenRoundedRectangle(
-                                topLeadingRadius: 0,
-                                bottomLeadingRadius: 0,
-                                bottomTrailingRadius: 6,
-                                topTrailingRadius: 6
-                            )
-                            .fill(Color.white)
-
-                            // Inner shadow from spine
-                            LinearGradient(
-                                colors: [Color.black.opacity(0.07), Color.clear],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                            .frame(width: 12)
-                        }
-                        .frame(width: pageW, height: pageH)
-
-                        // Flipping cover
-                        ZStack {
-                            // Front face: book cover
-                            BookCover(notebook: notebook, width: pageW, height: pageH)
-                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .opacity(coverAngle > -90 ? 1 : 0)
-
-                            // Back face: inside of cover
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(Color(hex: "F0EDE8"))
-
-                                LinearGradient(
-                                    colors: [Color.black.opacity(0.05), Color.clear],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                .frame(width: 10)
-                            }
-                            .frame(width: pageW, height: pageH)
-                            .scaleEffect(x: -1)
-                            .opacity(coverAngle <= -90 ? 1 : 0)
-                        }
-                        .frame(width: pageW, height: pageH)
-                        .shadow(color: .black.opacity(0.1 * flipProgress), radius: 8, x: -4, y: 4)
-                        .rotation3DEffect(
-                            .degrees(coverAngle),
-                            axis: (x: 0, y: 1, z: 0),
-                            anchor: .leading,
-                            perspective: 0.4
-                        )
-                    }
-                    .frame(width: pageW, height: pageH)
-                }
-                .compositingGroup()
-                .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 12)
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-        }
-        .ignoresSafeArea()
     }
 }
 
