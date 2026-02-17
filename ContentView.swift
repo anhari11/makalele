@@ -52,6 +52,8 @@ struct ContentView: View {
     @State private var openBookProgress: CGFloat = 0
     @State private var bookJump: CGFloat = 0
     @State private var bookTurn: CGFloat = 0
+    @State private var currentPage: Int = 0
+    @State private var flipProgress: CGFloat = 0
     @State private var showFullBook: Bool = false
     @State private var currentSpread: Int = 0
 
@@ -1386,7 +1388,7 @@ extension Color {
     }
 }
 
-// MARK: - Full Open Book View
+// MARK: - Full Open Book View (3D Physics)
 
 struct FullOpenBookView: View {
     @Binding var notebook: Notebook
@@ -1395,9 +1397,31 @@ struct FullOpenBookView: View {
     @Binding var currentSpread: Int
     let onClose: () -> Void
 
+    // Page state
     @State private var currentPage: Int = 0
-    @State private var flipProgress: CGFloat = 0 // 0 = flat, 1 = fully turned
+    @State private var flipProgress: CGFloat = 0
+
+    // 3D Physics — rigid body state
+    @State private var bookOffset: CGSize = .zero
+    @State private var rotationY: Double = 0       // vertical axis rotation (torque from drag)
+    @State private var rotationX: Double = 0       // subtle forward/back tilt
+    @State private var bookScale: CGFloat = 1.0
     @State private var isDragging: Bool = false
+
+    // Velocity tracking for torque simulation
+    @State private var prevDragX: CGFloat = 0
+    @State private var prevDragTime: Date = .now
+    @State private var velocityX: CGFloat = 0
+
+    // Dynamic shadow state (responds to elevation & rotation)
+    @State private var shadowBlur: CGFloat = 24
+    @State private var shadowOffsetY: CGFloat = 10
+    @State private var shadowOpacity: Double = 0.28
+
+    // Physics constants
+    private let maxRotY: Double = 15       // 12–18 degree range
+    private let maxRotX: Double = 5
+    private let bookThickness: CGFloat = 16 // 8–24 px book thickness
 
     private var canGoNext: Bool { currentPage < notebook.pages.count - 1 }
     private var canGoPrev: Bool { currentPage > 0 }
@@ -1408,6 +1432,8 @@ struct FullOpenBookView: View {
             let pageW = min(geo.size.width - 48, 380)
             let pageH = min(geo.size.height * 0.68, pageW * 1.45)
             let edgeThickness: CGFloat = min(CGFloat(notebook.pages.count) * 0.5, 6)
+            let fullW = pageW + coverPad * 2
+            let fullH = pageH + coverPad * 2
 
             ZStack {
                 Color.clear
@@ -1443,168 +1469,230 @@ struct FullOpenBookView: View {
 
                     Spacer()
 
-                    // The book
+                    // ═══ 3D PHYSICS BOOK ═══
                     ZStack {
-                        // Shadow
+                        // Ground-plane dynamic shadow
+                        // Anchored below book, blur increases with elevation,
+                        // opacity decreases when farther, offset tracks position
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.black.opacity(0.3))
-                            .frame(width: pageW + coverPad * 2 + 4, height: pageH + coverPad * 2 + 4)
-                            .blur(radius: 24)
-                            .offset(y: 10)
+                            .fill(Color.black.opacity(shadowOpacity))
+                            .frame(width: fullW + 4, height: fullH + 4)
+                            .blur(radius: shadowBlur)
+                            .offset(
+                                x: bookOffset.width * 0.08,
+                                y: shadowOffsetY + bookOffset.height * 0.05
+                            )
 
-                        // Cover
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(coverColor)
-                            .frame(width: pageW + coverPad * 2, height: pageH + coverPad * 2)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                        // ── Book rigid body ──
+                        ZStack {
+                            // Spine edge — left (visible when book rotates clockwise, rotY < 0)
+                            let spineVisibleWidth = bookThickness * abs(CGFloat(sin(rotationY * .pi / 180)))
+                            Rectangle()
+                                .fill(spineColor)
+                                .frame(width: max(1, spineVisibleWidth), height: fullH)
+                                .overlay(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black.opacity(0.22),
+                                            Color.white.opacity(0.06),
+                                            Color.black.opacity(0.28)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .offset(x: -fullW / 2 - max(1, spineVisibleWidth) / 2 + 1)
+                                .opacity(rotationY < -0.5 ? min(1, abs(rotationY) / 6) : 0)
+
+                            // Spine edge — right (visible when rotY > 0)
+                            Rectangle()
+                                .fill(spineColor)
+                                .frame(width: max(1, spineVisibleWidth), height: fullH)
+                                .overlay(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black.opacity(0.28),
+                                            Color.white.opacity(0.06),
+                                            Color.black.opacity(0.22)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .offset(x: fullW / 2 + max(1, spineVisibleWidth) / 2 - 1)
+                                .opacity(rotationY > 0.5 ? min(1, abs(rotationY) / 6) : 0)
+
+                            // Top thickness edge (visible during X tilt)
+                            let topThickVisible = bookThickness * abs(CGFloat(sin(rotationX * .pi / 180)))
+                            Rectangle()
+                                .fill(coverColor.opacity(0.85))
+                                .frame(width: fullW, height: max(1, topThickVisible))
+                                .overlay(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.1), Color.black.opacity(0.08)],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                                )
+                                .offset(y: -fullH / 2 - max(1, topThickVisible) / 2 + 1)
+                                .opacity(rotationX < -0.3 ? min(1, abs(rotationX) / 4) : 0)
+
+                            // Bottom thickness edge
+                            Rectangle()
+                                .fill(coverColor.opacity(0.75))
+                                .frame(width: fullW, height: max(1, topThickVisible))
+                                .overlay(
+                                    LinearGradient(
+                                        colors: [Color.black.opacity(0.1), Color.black.opacity(0.2)],
+                                        startPoint: .top, endPoint: .bottom
+                                    )
+                                )
+                                .offset(y: fullH / 2 + max(1, topThickVisible) / 2 - 1)
+                                .opacity(rotationX > 0.3 ? min(1, abs(rotationX) / 4) : 0)
+
+                            // Cover
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(coverColor)
+                                .frame(width: fullW, height: fullH)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(LinearGradient(
+                                            colors: [Color.white.opacity(0.1), Color.clear, Color.black.opacity(0.06)],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing
+                                        ))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.black.opacity(0.15), lineWidth: 0.5)
+                                )
+
+                            // Page edge — right (unread pages)
+                            let unreadCount = max(0, notebook.pages.count - currentPage - 1)
+                            let rightThickness = min(CGFloat(unreadCount) * 0.7, edgeThickness)
+                            if rightThickness > 0 {
+                                RoundedRectangle(cornerRadius: 3)
                                     .fill(LinearGradient(
-                                        colors: [Color.white.opacity(0.1), Color.clear, Color.black.opacity(0.06)],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                        colors: [Color(hex: "EAE7E2"), Color(hex: "F2F0EC"), Color(hex: "E8E5E0")],
+                                        startPoint: .leading, endPoint: .trailing
                                     ))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.black.opacity(0.15), lineWidth: 0.5)
-                            )
+                                    .frame(width: rightThickness, height: pageH - 8)
+                                    .offset(x: pageW / 2 + rightThickness / 2 - 1)
+                            }
 
-                        // Page edge block (right side — unread pages)
-                        let unreadCount = max(0, notebook.pages.count - currentPage - 1)
-                        let rightThickness = min(CGFloat(unreadCount) * 0.7, edgeThickness)
-                        if rightThickness > 0 {
-                            RoundedRectangle(cornerRadius: 3)
+                            // Page edge — left (read pages)
+                            let leftThickness = min(CGFloat(currentPage) * 0.7, edgeThickness)
+                            if leftThickness > 0 {
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(LinearGradient(
+                                        colors: [Color(hex: "E8E5E0"), Color(hex: "F2F0EC"), Color(hex: "EAE7E2")],
+                                        startPoint: .leading, endPoint: .trailing
+                                    ))
+                                    .frame(width: leftThickness, height: pageH - 8)
+                                    .offset(x: -(pageW / 2 + leftThickness / 2 - 1))
+                            }
+
+                            // Page edge — top
+                            RoundedRectangle(cornerRadius: 2)
                                 .fill(LinearGradient(
-                                    colors: [Color(hex: "EAE7E2"), Color(hex: "F2F0EC"), Color(hex: "E8E5E0")],
+                                    colors: [Color(hex: "E8E5E0"), Color(hex: "F0EDE8"), Color(hex: "E8E5E0")],
                                     startPoint: .leading, endPoint: .trailing
                                 ))
-                                .frame(width: rightThickness, height: pageH - 8)
-                                .offset(x: pageW / 2 + rightThickness / 2 - 1)
-                        }
+                                .frame(width: pageW + 2, height: max(2, edgeThickness * 0.5))
+                                .offset(y: -(pageH / 2 + max(2, edgeThickness * 0.5) / 2 - 1))
 
-                        // Page edge block (left side — read pages)
-                        let leftThickness = min(CGFloat(currentPage) * 0.7, edgeThickness)
-                        if leftThickness > 0 {
-                            RoundedRectangle(cornerRadius: 3)
+                            // Page edge — bottom
+                            RoundedRectangle(cornerRadius: 2)
                                 .fill(LinearGradient(
-                                    colors: [Color(hex: "E8E5E0"), Color(hex: "F2F0EC"), Color(hex: "EAE7E2")],
+                                    colors: [Color(hex: "E0DDD8"), Color(hex: "EAE7E2"), Color(hex: "E0DDD8")],
                                     startPoint: .leading, endPoint: .trailing
                                 ))
-                                .frame(width: leftThickness, height: pageH - 8)
-                                .offset(x: -(pageW / 2 + leftThickness / 2 - 1))
-                        }
+                                .frame(width: pageW + 2, height: max(2, edgeThickness * 0.5))
+                                .offset(y: pageH / 2 + max(2, edgeThickness * 0.5) / 2 - 1)
 
-                        // Page edge (top)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient(
-                                colors: [Color(hex: "E8E5E0"), Color(hex: "F0EDE8"), Color(hex: "E8E5E0")],
-                                startPoint: .leading, endPoint: .trailing
-                            ))
-                            .frame(width: pageW + 2, height: max(2, edgeThickness * 0.5))
-                            .offset(y: -(pageH / 2 + max(2, edgeThickness * 0.5) / 2 - 1))
+                            // -- Page layers --
 
-                        // Page edge (bottom)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(LinearGradient(
-                                colors: [Color(hex: "E0DDD8"), Color(hex: "EAE7E2"), Color(hex: "E0DDD8")],
-                                startPoint: .leading, endPoint: .trailing
-                            ))
-                            .frame(width: pageW + 2, height: max(2, edgeThickness * 0.5))
-                            .offset(y: pageH / 2 + max(2, edgeThickness * 0.5) / 2 - 1)
+                            // Page underneath (next or previous depending on flip direction)
+                            if flipProgress > 0 && canGoNext {
+                                BookPageView(
+                                    page: $notebook.pages[currentPage + 1],
+                                    pageNumber: currentPage + 2,
+                                    width: pageW,
+                                    height: pageH
+                                )
+                            } else if flipProgress < 0 && canGoPrev {
+                                BookPageView(
+                                    page: $notebook.pages[currentPage - 1],
+                                    pageNumber: currentPage,
+                                    width: pageW,
+                                    height: pageH
+                                )
+                            }
 
-                        // -- Page layers --
-
-                        // Page underneath (next or previous depending on direction)
-                        if flipProgress > 0 && canGoNext {
+                            // Current page (flips with drag)
                             BookPageView(
-                                page: $notebook.pages[currentPage + 1],
-                                pageNumber: currentPage + 2,
+                                page: $notebook.pages[currentPage],
+                                pageNumber: currentPage + 1,
                                 width: pageW,
                                 height: pageH
                             )
-                        } else if flipProgress < 0 && canGoPrev {
-                            BookPageView(
-                                page: $notebook.pages[currentPage - 1],
-                                pageNumber: currentPage,
-                                width: pageW,
-                                height: pageH
+                            .rotation3DEffect(
+                                .degrees(Double(-flipProgress) * 180),
+                                axis: (x: 0, y: 1, z: 0),
+                                anchor: flipProgress >= 0 ? .leading : .trailing,
+                                perspective: 0.4
                             )
-                        }
+                            .opacity(abs(flipProgress) > 0.5 ? 0 : 1)
+                            .shadow(
+                                color: Color.black.opacity(Double(abs(flipProgress)) * 0.15),
+                                radius: 8,
+                                x: flipProgress > 0 ? -4 : 4,
+                                y: 2
+                            )
 
-                        // Current page (flips with drag)
-                        BookPageView(
-                            page: $notebook.pages[currentPage],
-                            pageNumber: currentPage + 1,
-                            width: pageW,
-                            height: pageH
+                            // 3D directional lighting overlay — responds to rotation
+                            // Simulates light hitting the near edge, shadow on far edge
+                            let rotNorm = rotationY / maxRotY
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            rotNorm < 0
+                                                ? Color.white.opacity(abs(rotNorm) * 0.12)
+                                                : Color.black.opacity(abs(rotNorm) * 0.06),
+                                            Color.clear,
+                                            rotNorm > 0
+                                                ? Color.white.opacity(abs(rotNorm) * 0.12)
+                                                : Color.black.opacity(abs(rotNorm) * 0.06)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: fullW, height: fullH)
+                                .allowsHitTesting(false)
+                        }
+                        // 3D Physics transforms — real perspective projection
+                        .offset(bookOffset)
+                        .scaleEffect(bookScale)
+                        .rotation3DEffect(
+                            .degrees(rotationY),
+                            axis: (x: 0, y: 1, z: 0),
+                            anchor: .center,
+                            perspective: 0.5
                         )
                         .rotation3DEffect(
-                            .degrees(Double(-flipProgress) * 180),
-                            axis: (x: 0, y: 1, z: 0),
-                            anchor: flipProgress >= 0 ? .leading : .trailing,
-                            perspective: 0.4
-                        )
-                        .opacity(abs(flipProgress) > 0.5 ? 0 : 1)
-                        .shadow(
-                            color: Color.black.opacity(Double(abs(flipProgress)) * 0.15),
-                            radius: 8,
-                            x: flipProgress > 0 ? -4 : 4,
-                            y: 2
+                            .degrees(rotationX),
+                            axis: (x: 1, y: 0, z: 0),
+                            anchor: .center,
+                            perspective: 0.6
                         )
                     }
                     .gesture(
-                        DragGesture()
+                        DragGesture(minimumDistance: 5)
                             .onChanged { value in
-                                isDragging = true
-                                let drag = value.translation.width
-                                let maxDrag: CGFloat = 200
-                                // Normalize: negative drag (swipe left) = turn forward
-                                var progress = -drag / maxDrag
-                                // Clamp and apply resistance at edges
-                                if progress > 0 && !canGoNext { progress *= 0.2 }
-                                if progress < 0 && !canGoPrev { progress *= 0.2 }
-                                flipProgress = min(max(progress, -1), 1)
+                                handleDragChanged(value, pageWidth: pageW)
                             }
                             .onEnded { value in
-                                isDragging = false
-                                let velocity = -value.predictedEndTranslation.width / 200
-                                let threshold: CGFloat = 0.35
-
-                                if flipProgress > threshold || velocity > 1.5 {
-                                    // Turn to next page
-                                    if canGoNext {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                            flipProgress = 1
-                                        }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                            currentPage += 1
-                                            flipProgress = 0
-                                        }
-                                    } else {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            flipProgress = 0
-                                        }
-                                    }
-                                } else if flipProgress < -threshold || velocity < -1.5 {
-                                    // Turn to previous page
-                                    if canGoPrev {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                            flipProgress = -1
-                                        }
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                            currentPage -= 1
-                                            flipProgress = 0
-                                        }
-                                    } else {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            flipProgress = 0
-                                        }
-                                    }
-                                } else {
-                                    // Snap back
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        flipProgress = 0
-                                    }
-                                }
+                                handleDragEnded(value)
                             }
                     )
 
@@ -1621,6 +1709,118 @@ struct FullOpenBookView: View {
             }
         }
         .onAppear { currentPage = 0 }
+    }
+
+    // MARK: - Physics Drag Handling
+
+    /// Called every frame during drag — drives position, rotation, shadow, and page flip
+    private func handleDragChanged(_ value: DragGesture.Value, pageWidth: CGFloat) {
+        if !isDragging {
+            isDragging = true
+            // Elevate on pickup — book lifts off surface
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                bookScale = 1.012
+                shadowBlur = 34
+                shadowOffsetY = 18
+                shadowOpacity = 0.20
+            }
+        }
+
+        // ── Velocity tracking for torque simulation ──
+        let now = Date()
+        let dt = max(now.timeIntervalSince(prevDragTime), 0.016)
+        let dx = value.translation.width - prevDragX
+        velocityX = dx / CGFloat(dt)
+        prevDragTime = now
+        prevDragX = value.translation.width
+
+        // ── Position with spring interpolation (inertia — book follows with slight lag) ──
+        withAnimation(.interactiveSpring(response: 0.14, dampingFraction: 0.86, blendDuration: 0.05)) {
+            bookOffset = CGSize(
+                width: value.translation.width,
+                height: value.translation.height * 0.2 // vertical drag → minimal effect
+            )
+        }
+
+        // ── Rotation from velocity + offset (torque simulation) ──
+        // Faster drag → more rotation, position offset → base rotation
+        let offsetNorm = Double(value.translation.width) / Double(pageWidth * 0.5)
+        let velNorm = Double(velocityX) / 2200.0
+        let targetRotY = (offsetNorm * 0.35 + velNorm * 0.65) * maxRotY
+        let clampedRotY = min(max(targetRotY, -maxRotY), maxRotY)
+
+        let targetRotX = Double(value.translation.height) / Double(pageWidth) * maxRotX
+        let clampedRotX = min(max(targetRotX, -maxRotX), maxRotX)
+
+        withAnimation(.interactiveSpring(response: 0.18, dampingFraction: 0.78, blendDuration: 0.04)) {
+            rotationY = clampedRotY
+            rotationX = clampedRotX
+        }
+
+        // ── Simultaneous page flip progress ──
+        let drag = value.translation.width
+        var progress = -drag / 200
+        if progress > 0 && !canGoNext { progress *= 0.2 }
+        if progress < 0 && !canGoPrev { progress *= 0.2 }
+        flipProgress = min(max(progress, -1), 1)
+    }
+
+    /// Called on release — settles physics with spring and commits page turn if threshold met
+    private func handleDragEnded(_ value: DragGesture.Value) {
+        isDragging = false
+
+        let velocity = -value.predictedEndTranslation.width / 200
+        let threshold: CGFloat = 0.35
+
+        // Page turn decision
+        if flipProgress > threshold || velocity > 1.5 {
+            if canGoNext {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    flipProgress = 1
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    currentPage += 1
+                    flipProgress = 0
+                }
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    flipProgress = 0
+                }
+            }
+        } else if flipProgress < -threshold || velocity < -1.5 {
+            if canGoPrev {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    flipProgress = -1
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    currentPage -= 1
+                    flipProgress = 0
+                }
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    flipProgress = 0
+                }
+            }
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                flipProgress = 0
+            }
+        }
+
+        // ── Spring settle all physics — natural resting motion ──
+        // Medium stiffness + medium damping = solid feel, no oscillation, subtle bounce
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.72, blendDuration: 0.1)) {
+            bookOffset = .zero
+            rotationY = 0
+            rotationX = 0
+            bookScale = 1.0
+            shadowBlur = 24
+            shadowOffsetY = 10
+            shadowOpacity = 0.28
+        }
+
+        velocityX = 0
+        prevDragX = 0
     }
 
     private func addPage() {
