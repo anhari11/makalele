@@ -1591,7 +1591,7 @@ struct FullOpenBookView: View {
                                 // ── LEFT PAGE (concave: outer edge toward viewer) ──
                                 if currentPage < notebook.pages.count {
                                     ZStack(alignment: .bottom) {
-                                        // Page thickness edge (visible at bottom)
+                                        // Page thickness edge — visible facing us, fades at 90°
                                         RoundedRectangle(cornerRadius: 4)
                                             .fill(LinearGradient(
                                                 colors: [Color(hex: "E8E5E0"), Color(hex: "D8D5D0")],
@@ -1599,6 +1599,9 @@ struct FullOpenBookView: View {
                                             ))
                                             .frame(width: pageW - 4, height: 2.5)
                                             .offset(y: 2)
+                                            .opacity(flipProgress < 0
+                                                ? max(0, cos(abs(Double(flipProgress)) * .pi))
+                                                : 1.0)
 
                                         BookPageView(
                                             page: $notebook.pages[currentPage],
@@ -1642,7 +1645,7 @@ struct FullOpenBookView: View {
                                 // ── RIGHT PAGE (concave: outer edge toward viewer) ──
                                 if hasRightPage {
                                     ZStack(alignment: .bottom) {
-                                        // Page thickness edge (visible at bottom)
+                                        // Page thickness edge — visible facing us, fades at 90°
                                         RoundedRectangle(cornerRadius: 4)
                                             .fill(LinearGradient(
                                                 colors: [Color(hex: "E8E5E0"), Color(hex: "D8D5D0")],
@@ -1650,6 +1653,9 @@ struct FullOpenBookView: View {
                                             ))
                                             .frame(width: pageW - 4, height: 2.5)
                                             .offset(y: 2)
+                                            .opacity(flipProgress > 0
+                                                ? max(0, cos(Double(flipProgress) * .pi))
+                                                : 1.0)
 
                                         BookPageView(
                                             page: $notebook.pages[currentPage + 1],
