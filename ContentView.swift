@@ -43,9 +43,10 @@ struct ContentView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var openBookIndex: Int? = nil
     @State private var openBookProgress: CGFloat = 0
+    @State private var bookJump: CGFloat = 0
+    @State private var bookTurn: CGFloat = 0
 
-    private var formattedCreationDate: String {
-        let date = notebooks[selectedIndex].creationDate
+    private func formattedCreationDate(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE"
         let dayOfWeek = formatter.string(from: date)
@@ -62,8 +63,23 @@ struct ContentView: View {
         return "\(dayOfWeek), \(day)\(suffix) \(monthYear)"
     }
 
+    private var formattedCreationDate: String {
+        formattedCreationDate(for: notebooks[selectedIndex].creationDate)
+    }
+
+    private var uiColor: Color {
+        let p = Double(openBookProgress)
+        return p > 0 ? Color.white.opacity(0.55 + (1 - p) * 0.45) : Color.black
+    }
+
+    private var uiBgColor: Color {
+        let p = Double(openBookProgress)
+        return p > 0 ? Color.white.opacity(0.15) : Color(hex: "#EFEFEF")
+    }
+
     var body: some View {
         GeometryReader { geometry in
+            let isIPad = min(geometry.size.width, geometry.size.height) > 500
             ZStack {
                 Color.white
                     .ignoresSafeArea()
@@ -71,7 +87,7 @@ struct ContentView: View {
                 // Background overlay: book color when opening
                 if let openIndex = openBookIndex {
                     notebooks[openIndex].coverColor
-                        .opacity(Double(openBookProgress) * 0.3)
+                        .opacity(Double(openBookProgress))
                         .ignoresSafeArea()
                         .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                 }
@@ -83,20 +99,21 @@ struct ContentView: View {
                         Button(action: {}) {
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 22, weight: .medium))
-                                .foregroundColor(.black)
+                                .foregroundColor(uiColor)
                         }
                         Spacer()
 
                         HStack {
                             Text("Private")
                                 .fontWeight(.bold)
+                                .foregroundStyle(uiColor)
                             Image(systemName: "chevron.down")
-                                .foregroundColor(.black)
+                                .foregroundColor(uiColor)
                                 .fontWeight(.semibold)
                         }
                         .padding(.vertical, 5)
                         .padding(.horizontal, 20)
-                        .background(Color(hex: "#EFEFEF"))
+                        .background(uiBgColor)
 
                         Spacer()
 
@@ -105,16 +122,16 @@ struct ContentView: View {
                             .scaledToFill()
                             .frame(width: 34, height: 34)
                             .clipShape(Circle())
+                            .opacity(1 - Double(openBookProgress) * 0.5)
                             .overlay(
                                 Circle()
-                                    .stroke(Color(hex: "#efefef"), lineWidth: 2)
+                                    .stroke(uiBgColor, lineWidth: 2)
                                     .frame(width: 40, height: 40)
                             )
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
-                    .opacity(1 - Double(openBookProgress))
 
                     Spacer()
 
@@ -125,28 +142,30 @@ struct ContentView: View {
                                 Button(action: {}) {
                                     HStack(spacing: 2) {
                                         Text("aanhari")
-                                            .foregroundStyle(Color.black)
+                                            .foregroundStyle(uiColor)
                                             .font(.system(size: 17))
                                             .fontWeight(.bold)
                                         Image(systemName: "xmark")
-                                            .foregroundStyle(Color.black)
+                                            .foregroundStyle(uiColor)
                                     }
                                 }
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 5)
-                                .background(Color(hex: "#edebed"))
+                                .background(uiBgColor)
                                 .cornerRadius(1)
 
                                 Spacer()
 
                                 HStack(spacing: 4) {
                                     Image(systemName: "person.2.fill")
-                                        .foregroundStyle(Color.black)
+                                        .foregroundStyle(uiColor)
                                         .font(.system(size: 15, weight: .semibold))
                                     Text("Share with friends")
+                                        .foregroundStyle(uiColor)
                                         .fontWeight(.bold)
                                         .font(.system(size: 15, weight: .semibold))
                                     Image(systemName: "chevron.right")
+                                        .foregroundStyle(uiColor)
                                         .font(.system(size: 14, weight: .semibold))
                                 }
                             }
@@ -156,26 +175,28 @@ struct ContentView: View {
                                 Button(action: {}) {
                                     HStack(spacing: 2) {
                                         Text("aanhari")
-                                            .foregroundStyle(Color.black)
+                                            .foregroundStyle(uiColor)
                                             .font(.system(size: 17))
                                             .fontWeight(.bold)
                                         Image(systemName: "xmark")
-                                            .foregroundStyle(Color.black)
+                                            .foregroundStyle(uiColor)
                                     }
                                 }
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 5)
-                                .background(Color(hex: "#edebed"))
+                                .background(uiBgColor)
                                 .cornerRadius(1)
 
                                 HStack(spacing: 4) {
                                     Image(systemName: "person.2.fill")
-                                        .foregroundStyle(Color.black)
+                                        .foregroundStyle(uiColor)
                                         .font(.system(size: 15, weight: .semibold))
                                     Text("Share with friends")
+                                        .foregroundStyle(uiColor)
                                         .fontWeight(.bold)
                                         .font(.system(size: 15, weight: .semibold))
                                     Image(systemName: "chevron.right")
+                                        .foregroundStyle(uiColor)
                                         .font(.system(size: 14, weight: .semibold))
                                 }
                             }
@@ -184,7 +205,6 @@ struct ContentView: View {
                     .offset(x: dragOffset)
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
-                    .opacity(1 - Double(openBookProgress))
 
                     // Notebook Carousel
                     BookCarousel(
@@ -194,68 +214,75 @@ struct ContentView: View {
                         screenWidth: min(geometry.size.width, geometry.size.height),
                         openBookIndex: openBookIndex,
                         openBookProgress: openBookProgress,
+                        bookJump: bookJump,
+                        bookTurn: bookTurn,
                         onBookTap: { index in
                             handleBookTap(index: index)
                         }
                     )
-                    .frame(height: min(geometry.size.width, geometry.size.height) > 500 ? 532 : 418)
+                    .frame(height: isIPad ? 532 : 418)
 
                     // Title and ellipsis row
                     HStack {
                         HStack(spacing: 5) {
                             Text(notebooks[selectedIndex].title)
                                 .fontWeight(.semibold)
+                                .foregroundStyle(uiColor)
                         }
                         .padding(.vertical, 6)
                         .padding(.horizontal, 30)
-                        .background(Color(hex: "#EFEFEF"))
+                        .background(uiBgColor)
 
                         HStack {
                             Image(systemName: "ellipsis")
                                 .font(.title)
-                                .foregroundColor(.black)
+                                .foregroundColor(uiColor)
                         }
                         .padding(.vertical, 11)
                         .padding(.horizontal, 20)
-                        .background(Color(hex: "#EFEFEF"))
+                        .background(uiBgColor)
                     }
-                    .opacity(1 - Double(openBookProgress))
 
                     // Divider line with book name pill
-                    ZStack {
+                    HStack(spacing: 0) {
                         Rectangle()
-                            .fill(Color(hex: "E0E0E0"))
+                            .fill(openBookProgress > 0 ? Color.white.opacity(0.15) : Color(hex: "E0E0E0"))
                             .frame(height: 1)
 
                         HStack(spacing: 4) {
                             Button(action: {}) {
                                 Text(formattedCreationDate)
-                                    .foregroundColor(.black)
+                                    .foregroundColor(openBookProgress > 0 ? Color.white.opacity(0.7) : .black)
                                     .font(.system(size: 16))
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 2)
-                            .background(Color(hex: "#EFEFEF"))
+                            .background(openBookProgress > 0 ? Color.clear : Color(hex: "#EFEFEF"))
 
                             Text("by")
-                                .foregroundStyle(Color(hex: "#898988"))
+                                .foregroundStyle(openBookProgress > 0 ? uiColor.opacity(0.6) : Color(hex: "#898988"))
 
                             Text("@aanhari")
+                                .foregroundStyle(uiColor)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white)
+                            RoundedRectangle(cornerRadius: 0)
+                                .fill(openBookProgress > 0 ? Color.white.opacity(0.15) : Color.white)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(Color(hex: "E0E0E0"), lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: 0)
+                                        .stroke(openBookProgress > 0 ? Color.white.opacity(0.15) : Color(hex: "E0E0E0"), lineWidth: 1)
                                 )
                         )
+                        .fixedSize()
+
+                        Rectangle()
+                            .fill(openBookProgress > 0 ? Color.white.opacity(0.15) : Color(hex: "E0E0E0"))
+                            .frame(height: 1)
                     }
                     .padding(.top, 12)
                     .animation(.smooth(duration: 0.4), value: selectedIndex)
-                    .opacity(1 - Double(openBookProgress))
 
                     Spacer()
                 }
@@ -292,23 +319,67 @@ struct ContentView: View {
 
         openBookIndex = index
         openBookProgress = 0
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
-            openBookProgress = 1
+        bookJump = 0
+        bookTurn = 0
+
+        // Phase 1: Jump up
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+            bookJump = 1
+        }
+
+        // Phase 2: Turn the book so right side recedes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
+                bookTurn = 1
+            }
+        }
+
+        // Phase 3: Open the cover
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
+                openBookProgress = 1
+                bookJump = 0
+            }
         }
     }
 
     private func closeOpenBook() {
         guard openBookIndex != nil else { return }
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.9)) {
+
+        // Phase 1: Close the cover
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             openBookProgress = 0
         }
+
+        // Phase 2: Turn back to face forward
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                bookTurn = 0
+            }
+        }
+
+        // Phase 3: Bounce — jump up then land with springy settle
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.4)) {
+                bookJump = 1
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+                    bookJump = 0
+                }
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
             if openBookProgress == 0 {
                 openBookIndex = nil
             }
         }
     }
 }
+
+// MARK: - Open Book Footer
+
 
 // MARK: - Header View
 
@@ -396,6 +467,8 @@ struct BookCarousel: View {
     let screenWidth: CGFloat
     let openBookIndex: Int?
     let openBookProgress: CGFloat
+    let bookJump: CGFloat
+    let bookTurn: CGFloat
     let onBookTap: (Int) -> Void
 
     private var isIPad: Bool {
@@ -431,7 +504,9 @@ struct BookCarousel: View {
                         bookWidth: bookWidth,
                         bookHeight: bookHeight,
                         isOpening: isOpeningThis,
-                        openProgress: isOpeningThis ? openBookProgress : 0
+                        openProgress: isOpeningThis ? openBookProgress : 0,
+                        jump: isOpeningThis ? bookJump : 0,
+                        turn: isOpeningThis ? bookTurn : 0
                     )
                     .opacity(openBookIndex == nil || isOpeningThis ? 1 : 1 - Double(openBookProgress))
                     .contentShape(Rectangle())
@@ -498,6 +573,8 @@ struct BookItem: View {
     let bookHeight: CGFloat
     var isOpening: Bool = false
     var openProgress: CGFloat = 0
+    var jump: CGFloat = 0
+    var turn: CGFloat = 0
 
     private var isElevated: Bool {
         isSelected && !isDragging
@@ -511,16 +588,18 @@ struct BookItem: View {
         isSelected ? 1.0 : 0.92
     }
 
-    /// The angle the front cover rotates open (0 = closed, ~180 = fully open)
+    /// The angle the front cover rotates open (0 = closed, ~160 = fully open)
     private var coverOpenAngle: Double {
         Double(openProgress) * -160
     }
 
-    /// Shift right so the full visual (flipped cover on left + pages on right)
-    /// is centered, not just the pages alone
+    /// The whole book turns so the right side recedes
+    private var wholeTurnAngle: Double {
+        Double(turn) * -35
+    }
+
+    /// Shift right to center the full open visual
     private var centeringOffset: CGFloat {
-        // The cover extends ~bookWidth * sin(20°) ≈ 0.34 to the left when open
-        // Shift right by half that to center the combined visual
         openProgress * (bookWidth * 0.35)
     }
 
@@ -562,12 +641,21 @@ struct BookItem: View {
                 )
         }
         .frame(width: bookWidth, height: bookHeight)
+        // Turn the whole book
+        .rotation3DEffect(
+            .degrees(wholeTurnAngle),
+            axis: (x: 0, y: 1, z: 0),
+            perspective: 0.3
+        )
         .offset(x: centeringOffset)
         .scaleEffect(scale)
-        .offset(y: elevation)
+        // Jump + elevation
+        .offset(y: elevation + (jump * -40))
         .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isSelected)
         .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isDragging)
         .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openProgress)
+        .animation(.spring(response: 0.35, dampingFraction: 0.5), value: jump)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: turn)
     }
 }
 
