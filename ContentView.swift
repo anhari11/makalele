@@ -1719,18 +1719,21 @@ struct FullOpenBookView: View {
                                 }
                             }
                             .allowsHitTesting(false)
+
+                            // ── Swipe gesture overlay ──
+                            // Sits on TOP of all content, guarantees swipe works everywhere
+                            Color.white.opacity(0.001)
+                                .frame(width: fullW, height: fullH)
+                                .gesture(
+                                    DragGesture(minimumDistance: 3)
+                                        .onChanged { value in
+                                            handleFlipDrag(value, pageW: pageW)
+                                        }
+                                        .onEnded { value in
+                                            handleFlipEnd(value, pageW: pageW)
+                                        }
+                                )
                         }
-                        // Gesture on the book body — contentShape ensures full area responds
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 8)
-                                .onChanged { value in
-                                    handleFlipDrag(value, pageW: pageW)
-                                }
-                                .onEnded { value in
-                                    handleFlipEnd(value, pageW: pageW)
-                                }
-                        )
                         // Subtle 3D tilt during page flip
                         .rotation3DEffect(
                             .degrees(tiltY),
@@ -1828,31 +1831,34 @@ struct FullOpenBookView: View {
     private func handleFlipDrag(_ value: DragGesture.Value, pageW: CGFloat) {
         isDragging = true
         let drag = value.translation.width
-        let maxDrag = pageW * 0.8
+        let maxDrag: CGFloat = 120
 
-        // Flip progress from drag
         var progress = -drag / maxDrag
         if progress > 0 && !canGoNext { progress *= 0.15 }
         if progress < 0 && !canGoPrev { progress *= 0.15 }
-        flipProgress = min(max(progress, -1), 1)
+        let clamped = min(max(progress, -1), 1)
 
-        // Subtle book tilt follows the flip direction
-        let tiltTarget = Double(flipProgress) * -maxTiltY * 0.5
-        withAnimation(.interactiveSpring(response: 0.2, dampingFraction: 0.8, blendDuration: 0.05)) {
+        // Page follows finger with spring lag (inertia — not instant)
+        withAnimation(.interactiveSpring(response: 0.14, dampingFraction: 0.86, blendDuration: 0.02)) {
+            flipProgress = clamped
+        }
+
+        // Tilt + shadow follow raw progress
+        let tiltTarget = Double(clamped) * -maxTiltY * 0.5
+        withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.8, blendDuration: 0.05)) {
             tiltY = tiltTarget
-            // Shadow responds to elevation during flip
-            shadowBlur = 24 + abs(CGFloat(flipProgress)) * 8
-            shadowOffsetY = 10 + abs(CGFloat(flipProgress)) * 4
-            shadowOpacity = 0.28 - Double(abs(flipProgress)) * 0.06
+            shadowBlur = 24 + abs(CGFloat(clamped)) * 8
+            shadowOffsetY = 10 + abs(CGFloat(clamped)) * 4
+            shadowOpacity = 0.28 - Double(abs(clamped)) * 0.06
         }
     }
 
     private func handleFlipEnd(_ value: DragGesture.Value, pageW: CGFloat) {
         isDragging = false
-        let velocity = -value.predictedEndTranslation.width / (pageW * 0.8)
-        let threshold: CGFloat = 0.3
+        let velocity = -value.predictedEndTranslation.width / 120
+        let threshold: CGFloat = 0.2
 
-        if flipProgress > threshold || velocity > 1.2 {
+        if flipProgress > threshold || velocity > 0.8 {
             if canGoNext {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
                     flipProgress = 1
@@ -1866,7 +1872,7 @@ struct FullOpenBookView: View {
                     flipProgress = 0
                 }
             }
-        } else if flipProgress < -threshold || velocity < -1.2 {
+        } else if flipProgress < -threshold || velocity < -0.8 {
             if canGoPrev {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
                     flipProgress = -1
