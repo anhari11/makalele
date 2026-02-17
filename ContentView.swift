@@ -9,31 +9,38 @@ import SwiftUI
 
 // MARK: - Models
 
+struct Page: Identifiable {
+    let id = UUID()
+    var text: String
+}
+
 struct Notebook: Identifiable {
     let id = UUID()
     let title: String
-    let pageCount: Int
+    var pages: [Page]
     let coverColor: Color
     let spineColor: Color
     let pageEdgeColor: Color
     let hasCoverArt: Bool
     let textureURL: String
     let creationDate: Date
+
+    var pageCount: Int { pages.count }
 }
 
 // MARK: - Main Content View
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-        Notebook(title: "Maldives 2025 🌴", pageCount: 24, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: "", creationDate: {
+        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: "", creationDate: {
             var c = DateComponents(); c.year = 2025; c.month = 3; c.day = 14
             return Calendar.current.date(from: c)!
         }()),
-        Notebook(title: "Journal", pageCount: 1, coverColor: Color(hex: "D4705A"), spineColor: Color(hex: "A84535"), pageEdgeColor: Color(hex: "C75540"), hasCoverArt: false, textureURL: "", creationDate: {
+        Notebook(title: "Journal", pages: [Page(text: "")], coverColor: Color(hex: "D4705A"), spineColor: Color(hex: "A84535"), pageEdgeColor: Color(hex: "C75540"), hasCoverArt: false, textureURL: "", creationDate: {
             var c = DateComponents(); c.year = 2024; c.month = 11; c.day = 2
             return Calendar.current.date(from: c)!
         }()),
-        Notebook(title: "Ideas", pageCount: 8, coverColor: Color(hex: "B5AE8A"), spineColor: Color(hex: "D4B830"), pageEdgeColor: Color(hex: "D4B830"), hasCoverArt: false, textureURL: "", creationDate: {
+        Notebook(title: "Ideas", pages: (0..<8).map { _ in Page(text: "") }, coverColor: Color(hex: "B5AE8A"), spineColor: Color(hex: "D4B830"), pageEdgeColor: Color(hex: "D4B830"), hasCoverArt: false, textureURL: "", creationDate: {
             var c = DateComponents(); c.year = 2026; c.month = 1; c.day = 8
             return Calendar.current.date(from: c)!
         }())
@@ -45,6 +52,8 @@ struct ContentView: View {
     @State private var openBookProgress: CGFloat = 0
     @State private var bookJump: CGFloat = 0
     @State private var bookTurn: CGFloat = 0
+    @State private var showFullBook: Bool = false
+    @State private var currentSpread: Int = 0
 
     private func formattedCreationDate(for date: Date) -> String {
         let formatter = DateFormatter()
@@ -290,7 +299,7 @@ struct ContentView: View {
                 .allowsHitTesting(openBookIndex == nil)
 
                 // Tap anywhere to close the open book
-                if openBookIndex != nil {
+                if openBookIndex != nil && !showFullBook {
                     Color.clear
                         .contentShape(Rectangle())
                         .ignoresSafeArea()
@@ -298,6 +307,19 @@ struct ContentView: View {
                             closeOpenBook()
                         }
                         .zIndex(4)
+                }
+
+                // Full open book view
+                if let openIndex = openBookIndex, showFullBook {
+                    FullOpenBookView(
+                        notebook: $notebooks[openIndex],
+                        coverColor: notebooks[openIndex].coverColor,
+                        spineColor: notebooks[openIndex].spineColor,
+                        currentSpread: $currentSpread,
+                        onClose: { closeOpenBook() }
+                    )
+                    .transition(.opacity)
+                    .zIndex(5)
                 }
 
             }
@@ -341,11 +363,34 @@ struct ContentView: View {
                 bookJump = 0
             }
         }
+
+        // Phase 4: Show full open book view
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+            if openBookProgress == 1 && openBookIndex == index {
+                currentSpread = 0
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    showFullBook = true
+                }
+            }
+        }
     }
 
     private func closeOpenBook() {
         guard openBookIndex != nil else { return }
 
+        if showFullBook {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showFullBook = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                performCoverCloseAnimation()
+            }
+        } else {
+            performCoverCloseAnimation()
+        }
+    }
+
+    private func performCoverCloseAnimation() {
         // Phase 1: Close the cover
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             openBookProgress = 0
@@ -1338,6 +1383,301 @@ extension Color {
             blue: Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+// MARK: - Full Open Book View
+
+struct FullOpenBookView: View {
+    @Binding var notebook: Notebook
+    let coverColor: Color
+    let spineColor: Color
+    @Binding var currentSpread: Int
+    let onClose: () -> Void
+
+    @State private var currentPage: Int = 0
+    @State private var flipProgress: CGFloat = 0 // 0 = flat, 1 = fully turned
+    @State private var isDragging: Bool = false
+
+    private var canGoNext: Bool { currentPage < notebook.pages.count - 1 }
+    private var canGoPrev: Bool { currentPage > 0 }
+
+    var body: some View {
+        GeometryReader { geo in
+            let coverPad: CGFloat = 10
+            let pageW = min(geo.size.width - 48, 380)
+            let pageH = min(geo.size.height * 0.68, pageW * 1.45)
+            let edgeThickness: CGFloat = min(CGFloat(notebook.pages.count) * 0.5, 6)
+
+            ZStack {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture { onClose() }
+
+                VStack(spacing: 0) {
+                    // Top bar
+                    HStack {
+                        Button(action: onClose) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                                .frame(width: 34, height: 34)
+                                .background(Circle().fill(Color.white.opacity(0.15)))
+                        }
+                        Spacer()
+                        Text(notebook.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.9))
+                        Spacer()
+                        Button(action: addPage) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.8))
+                                .frame(width: 34, height: 34)
+                                .background(Circle().fill(Color.white.opacity(0.15)))
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+
+                    Spacer()
+
+                    // The book
+                    ZStack {
+                        // Shadow
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.black.opacity(0.3))
+                            .frame(width: pageW + coverPad * 2 + 4, height: pageH + coverPad * 2 + 4)
+                            .blur(radius: 24)
+                            .offset(y: 10)
+
+                        // Cover
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(coverColor)
+                            .frame(width: pageW + coverPad * 2, height: pageH + coverPad * 2)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(LinearGradient(
+                                        colors: [Color.white.opacity(0.1), Color.clear, Color.black.opacity(0.06)],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    ))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.black.opacity(0.15), lineWidth: 0.5)
+                            )
+
+                        // Page edge block (right side — unread pages)
+                        let unreadCount = max(0, notebook.pages.count - currentPage - 1)
+                        let rightThickness = min(CGFloat(unreadCount) * 0.7, edgeThickness)
+                        if rightThickness > 0 {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(LinearGradient(
+                                    colors: [Color(hex: "EAE7E2"), Color(hex: "F2F0EC"), Color(hex: "E8E5E0")],
+                                    startPoint: .leading, endPoint: .trailing
+                                ))
+                                .frame(width: rightThickness, height: pageH - 8)
+                                .offset(x: pageW / 2 + rightThickness / 2 - 1)
+                        }
+
+                        // Page edge block (left side — read pages)
+                        let leftThickness = min(CGFloat(currentPage) * 0.7, edgeThickness)
+                        if leftThickness > 0 {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(LinearGradient(
+                                    colors: [Color(hex: "E8E5E0"), Color(hex: "F2F0EC"), Color(hex: "EAE7E2")],
+                                    startPoint: .leading, endPoint: .trailing
+                                ))
+                                .frame(width: leftThickness, height: pageH - 8)
+                                .offset(x: -(pageW / 2 + leftThickness / 2 - 1))
+                        }
+
+                        // Page edge (top)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(LinearGradient(
+                                colors: [Color(hex: "E8E5E0"), Color(hex: "F0EDE8"), Color(hex: "E8E5E0")],
+                                startPoint: .leading, endPoint: .trailing
+                            ))
+                            .frame(width: pageW + 2, height: max(2, edgeThickness * 0.5))
+                            .offset(y: -(pageH / 2 + max(2, edgeThickness * 0.5) / 2 - 1))
+
+                        // Page edge (bottom)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(LinearGradient(
+                                colors: [Color(hex: "E0DDD8"), Color(hex: "EAE7E2"), Color(hex: "E0DDD8")],
+                                startPoint: .leading, endPoint: .trailing
+                            ))
+                            .frame(width: pageW + 2, height: max(2, edgeThickness * 0.5))
+                            .offset(y: pageH / 2 + max(2, edgeThickness * 0.5) / 2 - 1)
+
+                        // -- Page layers --
+
+                        // Page underneath (next or previous depending on direction)
+                        if flipProgress > 0 && canGoNext {
+                            BookPageView(
+                                page: $notebook.pages[currentPage + 1],
+                                pageNumber: currentPage + 2,
+                                width: pageW,
+                                height: pageH
+                            )
+                        } else if flipProgress < 0 && canGoPrev {
+                            BookPageView(
+                                page: $notebook.pages[currentPage - 1],
+                                pageNumber: currentPage,
+                                width: pageW,
+                                height: pageH
+                            )
+                        }
+
+                        // Current page (flips with drag)
+                        BookPageView(
+                            page: $notebook.pages[currentPage],
+                            pageNumber: currentPage + 1,
+                            width: pageW,
+                            height: pageH
+                        )
+                        .rotation3DEffect(
+                            .degrees(Double(-flipProgress) * 180),
+                            axis: (x: 0, y: 1, z: 0),
+                            anchor: flipProgress >= 0 ? .leading : .trailing,
+                            perspective: 0.4
+                        )
+                        .opacity(abs(flipProgress) > 0.5 ? 0 : 1)
+                        .shadow(
+                            color: Color.black.opacity(Double(abs(flipProgress)) * 0.15),
+                            radius: 8,
+                            x: flipProgress > 0 ? -4 : 4,
+                            y: 2
+                        )
+                    }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                isDragging = true
+                                let drag = value.translation.width
+                                let maxDrag: CGFloat = 200
+                                // Normalize: negative drag (swipe left) = turn forward
+                                var progress = -drag / maxDrag
+                                // Clamp and apply resistance at edges
+                                if progress > 0 && !canGoNext { progress *= 0.2 }
+                                if progress < 0 && !canGoPrev { progress *= 0.2 }
+                                flipProgress = min(max(progress, -1), 1)
+                            }
+                            .onEnded { value in
+                                isDragging = false
+                                let velocity = -value.predictedEndTranslation.width / 200
+                                let threshold: CGFloat = 0.35
+
+                                if flipProgress > threshold || velocity > 1.5 {
+                                    // Turn to next page
+                                    if canGoNext {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                            flipProgress = 1
+                                        }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                            currentPage += 1
+                                            flipProgress = 0
+                                        }
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            flipProgress = 0
+                                        }
+                                    }
+                                } else if flipProgress < -threshold || velocity < -1.5 {
+                                    // Turn to previous page
+                                    if canGoPrev {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                            flipProgress = -1
+                                        }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                            currentPage -= 1
+                                            flipProgress = 0
+                                        }
+                                    } else {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            flipProgress = 0
+                                        }
+                                    }
+                                } else {
+                                    // Snap back
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        flipProgress = 0
+                                    }
+                                }
+                            }
+                    )
+
+                    Spacer()
+
+                    // Page indicator
+                    HStack(spacing: 16) {
+                        Text("\(currentPage + 1) / \(notebook.pages.count)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(.bottom, 24)
+                }
+            }
+        }
+        .onAppear { currentPage = 0 }
+    }
+
+    private func addPage() {
+        notebook.pages.append(Page(text: ""))
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            flipProgress = 1
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            currentPage = notebook.pages.count - 1
+            flipProgress = 0
+        }
+    }
+}
+
+// MARK: - Book Page View
+
+struct BookPageView: View {
+    @Binding var page: Page
+    let pageNumber: Int
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            // Page paper
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(hex: "FAFAF7"))
+            // Subtle paper texture gradient
+            RoundedRectangle(cornerRadius: 6)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.3), Color.clear, Color.black.opacity(0.02)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+            // Page border
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
+
+            // Content
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(pageNumber)")
+                    .font(.system(size: 11, weight: .medium, design: .serif))
+                    .foregroundColor(Color(hex: "B0ADA8"))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.bottom, 8)
+
+                TextEditor(text: $page.text)
+                    .font(.system(size: 14, design: .serif))
+                    .foregroundColor(Color(hex: "2D2D2D"))
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+        }
+        .frame(width: width, height: height)
     }
 }
 
