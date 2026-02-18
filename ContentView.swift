@@ -1627,10 +1627,13 @@ struct FullOpenBookView: View {
                                         anchor: .trailing,
                                         perspective: 0.4
                                     )
-                                    .opacity(flipProgress < -0.5 ? 0 : 1)
+                                    // Gradual fade — visible through 90°, fades after
+                                    .opacity(flipProgress < -0.45
+                                        ? max(0, 1.0 - (Double(-flipProgress) - 0.45) / 0.35)
+                                        : 1.0)
                                     .opacity(flipProgress > 0.4
-                                        ? max(0, 1 - Double(flipProgress - 0.4) / 0.6)
-                                        : 1)
+                                        ? max(0, 1.0 - Double(flipProgress - 0.4) / 0.6)
+                                        : 1.0)
                                     .shadow(
                                         color: flipProgress < 0
                                             ? Color.black.opacity(Double(abs(flipProgress)) * 0.12)
@@ -1681,10 +1684,13 @@ struct FullOpenBookView: View {
                                         anchor: .leading,
                                         perspective: 0.4
                                     )
-                                    .opacity(flipProgress > 0.5 ? 0 : 1)
+                                    // Gradual fade — visible through 90°, fades after
+                                    .opacity(flipProgress > 0.45
+                                        ? max(0, 1.0 - (Double(flipProgress) - 0.45) / 0.35)
+                                        : 1.0)
                                     .opacity(flipProgress < -0.4
-                                        ? max(0, 1 - Double(abs(flipProgress) - 0.4) / 0.6)
-                                        : 1)
+                                        ? max(0, 1.0 - Double(abs(flipProgress) - 0.4) / 0.6)
+                                        : 1.0)
                                     .shadow(
                                         color: flipProgress > 0
                                             ? Color.black.opacity(Double(flipProgress) * 0.12)
@@ -1844,8 +1850,8 @@ struct FullOpenBookView: View {
         if progress < 0 && !canGoPrev { progress *= 0.15 }
         let clamped = min(max(progress, -1), 1)
 
-        // Page follows finger with spring lag (inertia — not instant)
-        withAnimation(.interactiveSpring(response: 0.14, dampingFraction: 0.86, blendDuration: 0.02)) {
+        // Page follows finger with visible spring lag (inertia — not instant)
+        withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.80, blendDuration: 0.02)) {
             flipProgress = clamped
         }
 
@@ -1866,40 +1872,42 @@ struct FullOpenBookView: View {
 
         if flipProgress > threshold || velocity > 0.8 {
             if canGoNext {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                // Slow, deliberate page turn
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) {
                     flipProgress = 1
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     currentPage += 2
                     flipProgress = 0
                 }
             } else {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
                     flipProgress = 0
                 }
             }
         } else if flipProgress < -threshold || velocity < -0.8 {
             if canGoPrev {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) {
                     flipProgress = -1
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     currentPage -= 2
                     flipProgress = 0
                 }
             } else {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
                     flipProgress = 0
                 }
             }
         } else {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            // Snap back gently
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
                 flipProgress = 0
             }
         }
 
         // Settle tilt and shadow
-        withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {
+        withAnimation(.spring(response: 0.65, dampingFraction: 0.72)) {
             tiltY = 0
             shadowBlur = 24
             shadowOffsetY = 10
