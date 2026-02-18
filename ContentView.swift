@@ -55,7 +55,6 @@ struct ContentView: View {
     @State private var currentPage: Int = 0
     @State private var flipProgress: CGFloat = 0
     @State private var showFullBook: Bool = false
-    @State private var currentSpread: Int = 0
 
     private func formattedCreationDate(for date: Date) -> String {
         let formatter = DateFormatter()
@@ -313,11 +312,10 @@ struct ContentView: View {
 
                 // Full open book view
                 if let openIndex = openBookIndex, showFullBook {
-                    FullOpenBookView(
+                    CarouselBookView(
                         notebook: $notebooks[openIndex],
                         coverColor: notebooks[openIndex].coverColor,
                         spineColor: notebooks[openIndex].spineColor,
-                        currentSpread: $currentSpread,
                         onClose: { closeOpenBook() }
                     )
                     .transition(.opacity)
@@ -369,7 +367,6 @@ struct ContentView: View {
         // Phase 4: Show full open book view
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
             if openBookProgress == 1 && openBookIndex == index {
-                currentSpread = 0
                 withAnimation(.easeInOut(duration: 0.4)) {
                     showFullBook = true
                 }
@@ -536,6 +533,11 @@ struct BookCarousel: View {
 
     @State private var isDragging: Bool = false
 
+    /// Max Y-axis rotation per carousel slot away from center (degrees)
+    private let cabinetAngle: Double = 35
+    /// Perspective strength for the revolving effect
+    private let cabinetPerspective: Double = 0.4
+
     var body: some View {
         GeometryReader { geometry in
             let totalBookWidth = bookWidth + bookSpacing
@@ -544,6 +546,13 @@ struct BookCarousel: View {
             HStack(alignment: .bottom, spacing: bookSpacing) {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
                     let isOpeningThis = openBookIndex == index
+                    // Continuous position relative to center (0 = centered, ±1 = one slot away, etc.)
+                    let continuousOffset = CGFloat(index - selectedIndex) + dragOffset / totalBookWidth
+                    // Rotation angle: books to the left rotate toward viewer on right edge, books to the right rotate toward viewer on left edge
+                    let rotationDeg = isOpeningThis ? 0.0 : Double(continuousOffset) * -cabinetAngle
+                    // Depth scale: centered book is full size, side books shrink slightly
+                    let depthScale = isOpeningThis ? 1.0 : max(0.82, 1.0 - abs(Double(continuousOffset)) * 0.08)
+
                     BookItem(
                         notebook: notebook,
                         isSelected: index == selectedIndex,
@@ -555,12 +564,18 @@ struct BookCarousel: View {
                         jump: isOpeningThis ? bookJump : 0,
                         turn: isOpeningThis ? bookTurn : 0
                     )
+                    .scaleEffect(depthScale)
+                    .rotation3DEffect(
+                        .degrees(rotationDeg),
+                        axis: (x: 0, y: 1, z: 0),
+                        perspective: cabinetPerspective
+                    )
                     .opacity(openBookIndex == nil || isOpeningThis ? 1 : 1 - Double(openBookProgress))
                     .contentShape(Rectangle())
                     .onTapGesture {
                         onBookTap(index)
                     }
-                    .zIndex(isOpeningThis ? 10 : 0)
+                    .zIndex(isOpeningThis ? 10 : Double(100 - abs(index - selectedIndex)))
                 }
             }
             .frame(height: geometry.size.height, alignment: .bottom)
@@ -895,289 +910,6 @@ struct BookCover: View {
     }
 }
 
-// MARK: - Open Book Overlay
-
-struct BookOpenOverlay: View {
-    let notebook: Notebook
-    let progress: CGFloat
-    let onClose: () -> Void
-
-    var body: some View {
-        ZStack {
-            Color(hex: "C8BFAF")
-                .ignoresSafeArea()
-
-            RealisticOpenBook(
-                coverColor: notebook.coverColor,
-                spineColor: notebook.spineColor,
-                pageColor: Color(hex: "FCFBF7"),
-                progress: progress
-            )
-            .frame(maxWidth: 680)
-            .padding(.horizontal, 24)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onClose()
-        }
-    }
-}
-
-struct RealisticOpenBook: View {
-    let coverColor: Color
-    let spineColor: Color
-    let pageColor: Color
-    let progress: CGFloat
-
-    private var clampedProgress: CGFloat {
-        min(1, max(0, progress))
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            let maxWidth = min(geometry.size.width * 0.92, geometry.size.height * 1.35)
-            let bookWidth = max(280, maxWidth)
-            let bookHeight = bookWidth * 0.62
-            let spineWidth = max(10, bookWidth * 0.035)
-            let pageWidth = (bookWidth - spineWidth) / 2
-            let pageHeight = bookHeight
-            let coverBleed = bookWidth * 0.035
-
-            let closedAngle: CGFloat = 68
-            let openAngle: CGFloat = 6
-            let leftAngle = Angle(degrees: Double(lerp(-closedAngle, -openAngle, clampedProgress)))
-            let rightAngle = Angle(degrees: Double(lerp(closedAngle, openAngle, clampedProgress)))
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.clear)
-                    .shadow(color: Color.black.opacity(0.28), radius: 26, x: 0, y: 16)
-
-                ZStack {
-                    HStack(spacing: 0) {
-                        OpenBookCover(color: coverColor)
-                            .frame(width: pageWidth + coverBleed, height: pageHeight + coverBleed * 1.15)
-                            .offset(x: -coverBleed * 0.5)
-                        OpenBookCover(color: coverColor)
-                            .frame(width: pageWidth + coverBleed, height: pageHeight + coverBleed * 1.15)
-                            .offset(x: coverBleed * 0.5)
-                    }
-
-                    HStack(spacing: 0) {
-                        OpenBookPage(side: .left, color: pageColor)
-                            .frame(width: pageWidth, height: pageHeight)
-                            .rotation3DEffect(
-                                leftAngle,
-                                axis: (x: 0, y: 1, z: 0),
-                                anchor: .trailing,
-                                perspective: 0.85
-                            )
-
-                        OpenBookPage(side: .right, color: pageColor)
-                            .frame(width: pageWidth, height: pageHeight)
-                            .rotation3DEffect(
-                                rightAngle,
-                                axis: (x: 0, y: 1, z: 0),
-                                anchor: .leading,
-                                perspective: 0.85
-                            )
-                    }
-
-                    OpenBookSpine(color: spineColor)
-                        .frame(width: spineWidth, height: pageHeight * 0.98)
-                        .scaleEffect(x: 0.92, y: 1.0)
-                }
-                .frame(width: bookWidth, height: bookHeight)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        }
-    }
-}
-
-enum PageSide {
-    case left
-    case right
-}
-
-struct OpenBookPage: View {
-    let side: PageSide
-    let color: Color
-
-    var body: some View {
-        GeometryReader { geometry in
-            let w = geometry.size.width
-            let h = geometry.size.height
-            let innerCurve = w * 0.07
-            let outerCurve = w * 0.05
-            let segments = 6
-            let segmentWidth = w / CGFloat(segments)
-            let bendAmplitude: CGFloat = 3.2
-
-            ZStack {
-                HStack(spacing: 0) {
-                    ForEach(0..<segments, id: \.self) { index in
-                        let t = side == .left
-                            ? CGFloat(segments - 1 - index) / CGFloat(segments - 1)
-                            : CGFloat(index) / CGFloat(segments - 1)
-                        let delta = side == .left
-                            ? (0.5 - t) * bendAmplitude
-                            : (t - 0.5) * bendAmplitude
-
-                        Rectangle()
-                            .fill(color)
-                            .frame(width: segmentWidth + 0.5, height: h)
-                            .rotation3DEffect(
-                                Angle(degrees: Double(delta)),
-                                axis: (x: 0, y: 1, z: 0),
-                                anchor: side == .left ? .trailing : .leading,
-                                perspective: 0.85
-                            )
-                    }
-                }
-                .mask(
-                    PageShape(side: side, cornerRadius: 10, innerCurve: innerCurve, outerCurve: outerCurve)
-                )
-
-                PageShape(side: side, cornerRadius: 10, innerCurve: innerCurve, outerCurve: outerCurve)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.18),
-                                Color.clear,
-                                Color.black.opacity(0.04)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                PageShape(side: side, cornerRadius: 10, innerCurve: innerCurve, outerCurve: outerCurve)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.black.opacity(0.16),
-                                Color.clear
-                            ],
-                            startPoint: side == .left ? .trailing : .leading,
-                            endPoint: side == .left ? .leading : .trailing
-                        )
-                    )
-                    .blendMode(.multiply)
-
-                PageShape(side: side, cornerRadius: 10, innerCurve: innerCurve, outerCurve: outerCurve)
-                    .stroke(Color.black.opacity(0.08), lineWidth: 0.6)
-            }
-            .frame(width: w, height: h)
-            .shadow(color: Color.black.opacity(0.12), radius: 6, x: side == .left ? -2 : 2, y: 4)
-        }
-    }
-}
-
-struct OpenBookCover: View {
-    let color: Color
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 14)
-            .fill(color)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.16),
-                                Color.clear,
-                                Color.black.opacity(0.12)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.black.opacity(0.12), lineWidth: 0.6)
-            )
-    }
-}
-
-struct OpenBookSpine: View {
-    let color: Color
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(color)
-            .overlay(
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(0.26),
-                        Color.white.opacity(0.04),
-                        Color.black.opacity(0.3)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .overlay(
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(0.2),
-                        Color.clear,
-                        Color.black.opacity(0.18)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 4)
-    }
-}
-
-struct PageShape: Shape {
-    let side: PageSide
-    let cornerRadius: CGFloat
-    let innerCurve: CGFloat
-    let outerCurve: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let r = cornerRadius
-        let minX = rect.minX
-        let maxX = rect.maxX
-        let minY = rect.minY
-        let maxY = rect.maxY
-
-        var path = Path()
-
-        if side == .left {
-            path.move(to: CGPoint(x: minX + r, y: minY))
-            path.addLine(to: CGPoint(x: maxX - r, y: minY))
-            path.addQuadCurve(to: CGPoint(x: maxX, y: minY + r), control: CGPoint(x: maxX, y: minY))
-            path.addQuadCurve(to: CGPoint(x: maxX, y: maxY - r), control: CGPoint(x: maxX - innerCurve, y: rect.midY))
-            path.addQuadCurve(to: CGPoint(x: maxX - r, y: maxY), control: CGPoint(x: maxX, y: maxY))
-            path.addLine(to: CGPoint(x: minX + r, y: maxY))
-            path.addQuadCurve(to: CGPoint(x: minX, y: maxY - r), control: CGPoint(x: minX - outerCurve, y: maxY))
-            path.addLine(to: CGPoint(x: minX, y: minY + r))
-            path.addQuadCurve(to: CGPoint(x: minX + r, y: minY), control: CGPoint(x: minX - outerCurve, y: minY))
-        } else {
-            path.move(to: CGPoint(x: minX + r, y: minY))
-            path.addLine(to: CGPoint(x: maxX - r, y: minY))
-            path.addQuadCurve(to: CGPoint(x: maxX, y: minY + r), control: CGPoint(x: maxX + outerCurve, y: minY))
-            path.addLine(to: CGPoint(x: maxX, y: maxY - r))
-            path.addQuadCurve(to: CGPoint(x: maxX - r, y: maxY), control: CGPoint(x: maxX + outerCurve, y: maxY))
-            path.addLine(to: CGPoint(x: minX + r, y: maxY))
-            path.addQuadCurve(to: CGPoint(x: minX, y: maxY - r), control: CGPoint(x: minX, y: maxY))
-            path.addQuadCurve(to: CGPoint(x: minX, y: minY + r), control: CGPoint(x: minX + innerCurve, y: rect.midY))
-            path.addQuadCurve(to: CGPoint(x: minX + r, y: minY), control: CGPoint(x: minX, y: minY))
-        }
-
-        path.closeSubpath()
-        return path
-    }
-}
-
-private func lerp(_ start: CGFloat, _ end: CGFloat, _ t: CGFloat) -> CGFloat {
-    start + (end - start) * t
-}
-
 // MARK: - Paper Demo Cover Art
 
 struct PaperDemoCoverArt: View {
@@ -1388,54 +1120,36 @@ extension Color {
     }
 }
 
-// MARK: - Full Open Book View (Two-Page Spread + Concave)
+// MARK: - Carousel Book View (Pop-up Carousel Style)
 
-struct FullOpenBookView: View {
+struct CarouselBookView: View {
     @Binding var notebook: Notebook
     let coverColor: Color
     let spineColor: Color
-    @Binding var currentSpread: Int
     let onClose: () -> Void
 
-    // currentPage = index of the LEFT page in the spread (always even: 0, 2, 4…)
-    @State private var currentPage: Int = 0
-    @State private var flipProgress: CGFloat = 0  // -1…1, positive = forward
-    @State private var isDragging: Bool = false
-
-    // Subtle 3D tilt during flip (book stays in place, only tilts)
-    @State private var tiltY: Double = 0
-    @State private var shadowBlur: CGFloat = 24
-    @State private var shadowOffsetY: CGFloat = 10
-    @State private var shadowOpacity: Double = 0.28
-
-    // Constants
-    private let concaveAngle: Double = 5.5    // concave curvature per page half
-    private let gutterW: CGFloat = 6          // spine gutter width
-    private let maxTiltY: Double = 8          // subtle tilt during flip
-    private let bookThickness: CGFloat = 14
-
-    private var hasRightPage: Bool { currentPage + 1 < notebook.pages.count }
-    private var canGoNext: Bool { currentPage + 2 < notebook.pages.count }
-    private var canGoPrev: Bool { currentPage >= 2 }
+    @State private var rotation: Double = 0
+    @State private var dragRotation: Double = 0
+    @State private var fanProgress: CGFloat = 0
+    @State private var riseProgress: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
-            let coverPad: CGFloat = 10
-            let totalW = min(geo.size.width - 24, 620)
-            let pageH = min(geo.size.height * 0.58, totalW * 0.68)
-            let pageW = (totalW - gutterW) / 2
-            let fullW = totalW + coverPad * 2
-            let fullH = pageH + coverPad * 2
-            let edgeThickness: CGFloat = min(CGFloat(notebook.pages.count) * 0.4, 5)
+            let isIPad = min(geo.size.width, geo.size.height) > 500
+            let pageCount = notebook.pages.count
+            let sliceAngle = 360.0 / Double(max(pageCount, 1))
+            let size = min(geo.size.width, geo.size.height)
+
+            let baseRadius: CGFloat = isIPad ? size * 0.25 : size * 0.22
+            let radius = baseRadius + CGFloat(max(0, pageCount - 8)) * 2.5
+            let pageW: CGFloat = isIPad ? min(size * 0.2, 160) : min(size * 0.26, 120)
+            let pageH = pageW * 1.5
 
             ZStack {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture { onClose() }
+                coverColor.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Top bar
+                    // Header
                     HStack {
                         Button(action: onClose) {
                             Image(systemName: "xmark")
@@ -1462,515 +1176,203 @@ struct FullOpenBookView: View {
 
                     Spacer()
 
-                    // ═══ TWO-PAGE SPREAD BOOK ═══
+                    // 3D Carousel
                     ZStack {
-                        // Ground-plane shadow
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.black.opacity(shadowOpacity))
-                            .frame(width: fullW + 4, height: fullH + 4)
-                            .blur(radius: shadowBlur)
-                            .offset(y: shadowOffsetY)
-
-                        // Book body
-                        ZStack {
-                            // Cover
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(coverColor)
-                                .frame(width: fullW, height: fullH)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(LinearGradient(
-                                            colors: [Color.white.opacity(0.1), Color.clear, Color.black.opacity(0.06)],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing
-                                        ))
+                        // Ground shadow ellipse
+                        Ellipse()
+                            .fill(
+                                RadialGradient(
+                                    colors: [Color.black.opacity(0.25), Color.black.opacity(0.06), Color.clear],
+                                    center: .center,
+                                    startRadius: radius * 0.15,
+                                    endRadius: radius * 1.5
                                 )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.black.opacity(0.15), lineWidth: 0.5)
+                            )
+                            .frame(width: radius * 3.2, height: radius * 1.0)
+                            .offset(y: pageH * 0.55)
+                            .opacity(Double(fanProgress))
+
+                        // Base platform (book covers as circular base)
+                        Ellipse()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        coverColor.opacity(0.5),
+                                        coverColor.opacity(0.2),
+                                        Color.clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: radius * 1.2
                                 )
+                            )
+                            .frame(width: radius * 2.6, height: radius * 0.85)
+                            .overlay(
+                                Ellipse()
+                                    .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
+                            )
+                            .offset(y: pageH * 0.5)
+                            .opacity(Double(fanProgress) * 0.5)
 
-                            // Page edge — top
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(LinearGradient(
-                                    colors: [Color(hex: "E8E5E0"), Color(hex: "F0EDE8"), Color(hex: "E8E5E0")],
-                                    startPoint: .leading, endPoint: .trailing
-                                ))
-                                .frame(width: totalW + 2, height: max(2, edgeThickness * 0.5))
-                                .offset(y: -(pageH / 2 + max(2, edgeThickness * 0.5) / 2 - 1))
+                        // Carousel pages
+                        ForEach(Array(notebook.pages.enumerated()), id: \.element.id) { index, page in
+                            let totalRot = rotation + dragRotation
+                            let spreadAngle = sliceAngle * Double(index) * Double(fanProgress)
+                            let angle = spreadAngle + totalRot
+                            let currentRadius = Double(radius) * Double(fanProgress)
+                            let rad = angle * .pi / 180.0
 
-                            // Page edge — bottom
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(LinearGradient(
-                                    colors: [Color(hex: "E0DDD8"), Color(hex: "EAE7E2"), Color(hex: "E0DDD8")],
-                                    startPoint: .leading, endPoint: .trailing
-                                ))
-                                .frame(width: totalW + 2, height: max(2, edgeThickness * 0.5))
-                                .offset(y: pageH / 2 + max(2, edgeThickness * 0.5) / 2 - 1)
+                            let xPos = sin(rad) * currentRadius
+                            let zPos = cos(rad) * currentRadius
 
-                            // Page edge — left (read pages stack)
-                            let leftStack = min(CGFloat(currentPage / 2) * 0.7, edgeThickness)
-                            if leftStack > 0 {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(LinearGradient(
-                                        colors: [Color(hex: "E8E5E0"), Color(hex: "F2F0EC"), Color(hex: "EAE7E2")],
-                                        startPoint: .leading, endPoint: .trailing
-                                    ))
-                                    .frame(width: leftStack, height: pageH - 8)
-                                    .offset(x: -(totalW / 2 + leftStack / 2 - 1))
-                            }
+                            let depthN: Double = currentRadius > 1 ? (zPos / currentRadius + 1) / 2.0 : 0.5
+                            let depthScale = 0.55 + depthN * 0.45
+                            let depthOpacity = 0.3 + depthN * 0.7
 
-                            // Page edge — right (unread pages stack)
-                            let unreadSpreads = max(0, (notebook.pages.count - currentPage - 2) / 2)
-                            let rightStack = min(CGFloat(unreadSpreads) * 0.7, edgeThickness)
-                            if rightStack > 0 {
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(LinearGradient(
-                                        colors: [Color(hex: "EAE7E2"), Color(hex: "F2F0EC"), Color(hex: "E8E5E0")],
-                                        startPoint: .leading, endPoint: .trailing
-                                    ))
-                                    .frame(width: rightStack, height: pageH - 8)
-                                    .offset(x: totalW / 2 + rightStack / 2 - 1)
-                            }
-
-                            // ── Page stack thickness (3D depth layers) ──
-                            // Elevation shadow — pages float above cover
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.black.opacity(0.07))
-                                .frame(width: totalW - 4, height: pageH - 4)
-                                .blur(radius: 4)
-                                .offset(y: 5)
-
-                            // Stacked page layers beneath top pages (visible thickness)
-                            let stackCount = min(max(notebook.pages.count / 2, 1), 5)
-                            ForEach(0..<stackCount, id: \.self) { i in
-                                let dy = CGFloat(stackCount - i) * 1.0
-                                let shade = 0.95 - Double(stackCount - 1 - i) * 0.012
-                                HStack(spacing: gutterW) {
-                                    RoundedRectangle(cornerRadius: 5)
-                                        .fill(Color(white: shade))
-                                        .frame(width: pageW - 1, height: pageH - 1)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 5)
-                                                .stroke(Color.black.opacity(0.03), lineWidth: 0.5)
-                                        )
-                                    RoundedRectangle(cornerRadius: 5)
-                                        .fill(Color(white: shade))
-                                        .frame(width: pageW - 1, height: pageH - 1)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 5)
-                                                .stroke(Color.black.opacity(0.03), lineWidth: 0.5)
-                                        )
-                                }
-                                .offset(y: dy)
-                            }
-
-                            // === PAGE LAYERS ===
-
-                            // Bottom layer: next/prev spread (revealed during flip)
-                            if flipProgress > 0.01 && canGoNext {
-                                spreadView(
-                                    leftIdx: currentPage + 2,
-                                    rightIdx: currentPage + 3,
-                                    pageW: pageW, pageH: pageH,
-                                    interactive: false
-                                )
-                                .allowsHitTesting(false)
-                            }
-                            if flipProgress < -0.01 && canGoPrev {
-                                spreadView(
-                                    leftIdx: currentPage - 2,
-                                    rightIdx: currentPage - 1,
-                                    pageW: pageW, pageH: pageH,
-                                    interactive: false
-                                )
-                                .allowsHitTesting(false)
-                            }
-
-                            // Top layer: current spread with flip animation
-                            HStack(spacing: gutterW) {
-                                // ── LEFT PAGE (concave: outer edge toward viewer) ──
-                                if currentPage < notebook.pages.count {
-                                    ZStack(alignment: .bottom) {
-                                        // Page thickness edge — visible facing us, fades at 90°
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(LinearGradient(
-                                                colors: [Color(hex: "E8E5E0"), Color(hex: "D8D5D0")],
-                                                startPoint: .top, endPoint: .bottom
-                                            ))
-                                            .frame(width: pageW - 4, height: 2.5)
-                                            .offset(y: 2)
-                                            .opacity(flipProgress < 0
-                                                ? max(0, cos(abs(Double(flipProgress)) * .pi))
-                                                : 1.0)
-
-                                        BookPageView(
-                                            page: $notebook.pages[currentPage],
-                                            pageNumber: currentPage + 1,
-                                            width: pageW,
-                                            height: pageH
-                                        )
-                                    }
-                                    .frame(width: pageW, height: pageH + 3)
-                                    // Concave curvature — left edge comes toward viewer
-                                    .rotation3DEffect(
-                                        .degrees(concaveAngle),
-                                        axis: (x: 0, y: 1, z: 0),
-                                        anchor: .trailing,
-                                        perspective: 0.8
-                                    )
-                                    // Backward flip: left page turns over to the right
-                                    .rotation3DEffect(
-                                        flipProgress < 0
-                                            ? .degrees(Double(-flipProgress) * 180)
-                                            : .degrees(0),
-                                        axis: (x: 0, y: 1, z: 0),
-                                        anchor: .trailing,
-                                        perspective: 0.4
-                                    )
-                                    // Gradual fade — visible through 90°, fades after
-                                    .opacity(flipProgress < -0.45
-                                        ? max(0, 1.0 - (Double(-flipProgress) - 0.45) / 0.35)
-                                        : 1.0)
-                                    .opacity(flipProgress > 0.4
-                                        ? max(0, 1.0 - Double(flipProgress - 0.4) / 0.6)
-                                        : 1.0)
-                                    .shadow(
-                                        color: flipProgress < 0
-                                            ? Color.black.opacity(Double(abs(flipProgress)) * 0.12)
-                                            : .clear,
-                                        radius: 6, x: 4, y: 2
-                                    )
-                                    .zIndex(flipProgress < 0 ? 2 : 0)
-                                } else {
-                                    elevatedBlankPage(width: pageW, height: pageH)
-                                }
-
-                                // ── RIGHT PAGE (concave: outer edge toward viewer) ──
-                                if hasRightPage {
-                                    ZStack(alignment: .bottom) {
-                                        // Page thickness edge — visible facing us, fades at 90°
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(LinearGradient(
-                                                colors: [Color(hex: "E8E5E0"), Color(hex: "D8D5D0")],
-                                                startPoint: .top, endPoint: .bottom
-                                            ))
-                                            .frame(width: pageW - 4, height: 2.5)
-                                            .offset(y: 2)
-                                            .opacity(flipProgress > 0
-                                                ? max(0, cos(Double(flipProgress) * .pi))
-                                                : 1.0)
-
-                                        BookPageView(
-                                            page: $notebook.pages[currentPage + 1],
-                                            pageNumber: currentPage + 2,
-                                            width: pageW,
-                                            height: pageH
-                                        )
-                                    }
-                                    .frame(width: pageW, height: pageH + 3)
-                                    // Concave curvature — right edge comes toward viewer
-                                    .rotation3DEffect(
-                                        .degrees(-concaveAngle),
-                                        axis: (x: 0, y: 1, z: 0),
-                                        anchor: .leading,
-                                        perspective: 0.8
-                                    )
-                                    // Forward flip: right page turns over to the left
-                                    .rotation3DEffect(
-                                        flipProgress > 0
-                                            ? .degrees(Double(-flipProgress) * 180)
-                                            : .degrees(0),
-                                        axis: (x: 0, y: 1, z: 0),
-                                        anchor: .leading,
-                                        perspective: 0.4
-                                    )
-                                    // Gradual fade — visible through 90°, fades after
-                                    .opacity(flipProgress > 0.45
-                                        ? max(0, 1.0 - (Double(flipProgress) - 0.45) / 0.35)
-                                        : 1.0)
-                                    .opacity(flipProgress < -0.4
-                                        ? max(0, 1.0 - Double(abs(flipProgress) - 0.4) / 0.6)
-                                        : 1.0)
-                                    .shadow(
-                                        color: flipProgress > 0
-                                            ? Color.black.opacity(Double(flipProgress) * 0.12)
-                                            : .clear,
-                                        radius: 6, x: -4, y: 2
-                                    )
-                                    .zIndex(flipProgress > 0 ? 2 : 0)
-                                } else {
-                                    elevatedBlankPage(width: pageW, height: pageH)
-                                }
-                            }
-                            .allowsHitTesting(false)
-
-                            // Spine gutter — center crease shadow
-                            ZStack {
-                                Rectangle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.black.opacity(0.14),
-                                                Color.black.opacity(0.24),
-                                                Color.black.opacity(0.14)
-                                            ],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .frame(width: gutterW + 10, height: pageH)
-                                    .blur(radius: 3)
-
-                                HStack(spacing: gutterW - 2) {
-                                    Rectangle()
-                                        .fill(Color.white.opacity(0.06))
-                                        .frame(width: 1, height: pageH)
-                                    Rectangle()
-                                        .fill(Color.white.opacity(0.06))
-                                        .frame(width: 1, height: pageH)
-                                }
-                            }
-                            .allowsHitTesting(false)
-
-                            // ── Swipe gesture overlay ──
-                            // Sits on TOP of all content, guarantees swipe works everywhere
-                            Color.white.opacity(0.001)
-                                .frame(width: fullW, height: fullH)
-                                .gesture(
-                                    DragGesture(minimumDistance: 3)
-                                        .onChanged { value in
-                                            handleFlipDrag(value, pageW: pageW)
-                                        }
-                                        .onEnded { value in
-                                            handleFlipEnd(value, pageW: pageW)
-                                        }
-                                )
+                            CarouselPagePanel(
+                                page: page,
+                                pageNumber: index + 1,
+                                width: pageW,
+                                height: pageH
+                            )
+                            .scaleEffect(depthScale * (0.4 + 0.6 * riseProgress))
+                            .offset(x: CGFloat(xPos))
+                            .opacity(depthOpacity * Double(riseProgress))
+                            .zIndex(depthN * 100)
+                            // Face outward from center
+                            .rotation3DEffect(
+                                .degrees(-angle),
+                                axis: (x: 0, y: 1, z: 0),
+                                perspective: 0.35
+                            )
+                            // Rise from flat to standing
+                            .rotation3DEffect(
+                                .degrees(Double(1 - riseProgress) * 85),
+                                axis: (x: 1, y: 0, z: 0),
+                                anchor: .bottom,
+                                perspective: 0.3
+                            )
                         }
-                        // Subtle 3D tilt during page flip
-                        .rotation3DEffect(
-                            .degrees(tiltY),
-                            axis: (x: 0, y: 1, z: 0),
-                            anchor: .center,
-                            perspective: 0.5
-                        )
                     }
+                    // Top-down viewing angle
+                    .rotation3DEffect(
+                        .degrees(20),
+                        axis: (x: 1, y: 0, z: 0),
+                        perspective: 0.4
+                    )
+                    .frame(height: pageH + 100)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 5)
+                            .onChanged { value in
+                                dragRotation = Double(value.translation.width) * 0.5
+                            }
+                            .onEnded { value in
+                                let vel = Double(value.predictedEndTranslation.width - value.translation.width) * 0.25
+                                rotation += dragRotation + vel
+                                dragRotation = 0
+
+                                let nearest = round(rotation / sliceAngle) * sliceAngle
+                                withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
+                                    rotation = nearest
+                                }
+                            }
+                    )
 
                     Spacer()
 
-                    // Spread indicator
-                    HStack(spacing: 16) {
-                        Text("Pages \(currentPage + 1)–\(min(currentPage + 2, notebook.pages.count)) of \(notebook.pages.count)")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    .padding(.bottom, 24)
+                    // Page indicator
+                    let idx = frontPageIndex(pageCount: pageCount, sliceAngle: sliceAngle)
+                    Text("Page \(idx + 1) of \(pageCount)")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.bottom, 24)
                 }
             }
         }
-        .onAppear { currentPage = 0 }
-    }
-
-    // MARK: - Elevated Blank Page
-
-    @ViewBuilder
-    private func elevatedBlankPage(width: CGFloat, height: CGFloat) -> some View {
-        ZStack(alignment: .bottom) {
-            // Page thickness edge
-            RoundedRectangle(cornerRadius: 4)
-                .fill(LinearGradient(
-                    colors: [Color(hex: "E8E5E0"), Color(hex: "D8D5D0")],
-                    startPoint: .top, endPoint: .bottom
-                ))
-                .frame(width: width - 4, height: 2.5)
-                .offset(y: 2)
-
-            // Blank page surface
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(hex: "FAFAF7"))
-                .frame(width: width, height: height)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.black.opacity(0.04), lineWidth: 0.5)
-                )
-                .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 2)
-        }
-        .frame(width: width, height: height + 3)
-    }
-
-    // MARK: - Underneath Spread (read-only preview)
-
-    @ViewBuilder
-    private func spreadView(leftIdx: Int, rightIdx: Int, pageW: CGFloat, pageH: CGFloat, interactive: Bool) -> some View {
-        HStack(spacing: gutterW) {
-            if leftIdx >= 0 && leftIdx < notebook.pages.count {
-                BookPageView(
-                    page: interactive ? $notebook.pages[leftIdx] : .constant(notebook.pages[leftIdx]),
-                    pageNumber: leftIdx + 1,
-                    width: pageW,
-                    height: pageH
-                )
-                .rotation3DEffect(
-                    .degrees(concaveAngle),
-                    axis: (x: 0, y: 1, z: 0),
-                    anchor: .trailing,
-                    perspective: 0.8
-                )
-            } else {
-                Color(hex: "FAFAF7").frame(width: pageW, height: pageH).cornerRadius(6)
+        .onAppear {
+            // Rise up from flat
+            withAnimation(.spring(response: 0.65, dampingFraction: 0.72)) {
+                riseProgress = 1
             }
-
-            if rightIdx >= 0 && rightIdx < notebook.pages.count {
-                BookPageView(
-                    page: interactive ? $notebook.pages[rightIdx] : .constant(notebook.pages[rightIdx]),
-                    pageNumber: rightIdx + 1,
-                    width: pageW,
-                    height: pageH
-                )
-                .rotation3DEffect(
-                    .degrees(-concaveAngle),
-                    axis: (x: 0, y: 1, z: 0),
-                    anchor: .leading,
-                    perspective: 0.8
-                )
-            } else {
-                Color(hex: "FAFAF7").frame(width: pageW, height: pageH).cornerRadius(6)
+            // Then fan out into carousel
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                withAnimation(.spring(response: 0.85, dampingFraction: 0.68)) {
+                    fanProgress = 1
+                }
             }
         }
     }
 
-    // MARK: - Flip Gesture (no book dragging — swipe only flips pages)
-
-    private func handleFlipDrag(_ value: DragGesture.Value, pageW: CGFloat) {
-        isDragging = true
-        let drag = value.translation.width
-        let maxDrag: CGFloat = 120
-
-        var progress = -drag / maxDrag
-        if progress > 0 && !canGoNext { progress *= 0.15 }
-        if progress < 0 && !canGoPrev { progress *= 0.15 }
-        let clamped = min(max(progress, -1), 1)
-
-        // Page follows finger with visible spring lag (inertia — not instant)
-        withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.80, blendDuration: 0.02)) {
-            flipProgress = clamped
-        }
-
-        // Tilt + shadow follow raw progress
-        let tiltTarget = Double(clamped) * -maxTiltY * 0.5
-        withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.8, blendDuration: 0.05)) {
-            tiltY = tiltTarget
-            shadowBlur = 24 + abs(CGFloat(clamped)) * 8
-            shadowOffsetY = 10 + abs(CGFloat(clamped)) * 4
-            shadowOpacity = 0.28 - Double(abs(clamped)) * 0.06
-        }
-    }
-
-    private func handleFlipEnd(_ value: DragGesture.Value, pageW: CGFloat) {
-        isDragging = false
-        let velocity = -value.predictedEndTranslation.width / 120
-        let threshold: CGFloat = 0.2
-
-        if flipProgress > threshold || velocity > 0.8 {
-            if canGoNext {
-                // Slow, deliberate page turn
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) {
-                    flipProgress = 1
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    currentPage += 2
-                    flipProgress = 0
-                }
-            } else {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                    flipProgress = 0
-                }
-            }
-        } else if flipProgress < -threshold || velocity < -0.8 {
-            if canGoPrev {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) {
-                    flipProgress = -1
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    currentPage -= 2
-                    flipProgress = 0
-                }
-            } else {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                    flipProgress = 0
-                }
-            }
-        } else {
-            // Snap back gently
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                flipProgress = 0
-            }
-        }
-
-        // Settle tilt and shadow
-        withAnimation(.spring(response: 0.65, dampingFraction: 0.72)) {
-            tiltY = 0
-            shadowBlur = 24
-            shadowOffsetY = 10
-            shadowOpacity = 0.28
-        }
+    private func frontPageIndex(pageCount: Int, sliceAngle: Double) -> Int {
+        guard pageCount > 0, sliceAngle > 0 else { return 0 }
+        let total = rotation + dragRotation
+        let norm = total.truncatingRemainder(dividingBy: 360)
+        let adjusted = norm < 0 ? norm + 360 : norm
+        let idx = Int(round(adjusted / sliceAngle)) % pageCount
+        return (pageCount - idx) % pageCount
     }
 
     private func addPage() {
         notebook.pages.append(Page(text: ""))
-        let lastSpreadStart = max(0, (notebook.pages.count - 1) / 2 * 2)
-        if currentPage != lastSpreadStart {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) {
-                flipProgress = 1
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                currentPage = lastSpreadStart
-                flipProgress = 0
-            }
-        }
     }
 }
 
-// MARK: - Book Page View
+// MARK: - Carousel Page Panel
 
-struct BookPageView: View {
-    @Binding var page: Page
+struct CarouselPagePanel: View {
+    let page: Page
     let pageNumber: Int
     let width: CGFloat
     let height: CGFloat
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Page paper
-            RoundedRectangle(cornerRadius: 6)
+            // Paper
+            RoundedRectangle(cornerRadius: 8)
                 .fill(Color(hex: "FAFAF7"))
-            // Subtle paper texture gradient
-            RoundedRectangle(cornerRadius: 6)
+                .shadow(color: .black.opacity(0.18), radius: 10, x: 0, y: 6)
+
+            // Paper texture
+            RoundedRectangle(cornerRadius: 8)
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.3), Color.clear, Color.black.opacity(0.02)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
+                        colors: [Color.white.opacity(0.35), Color.clear, Color.black.opacity(0.02)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
                 )
-            // Page border
-            RoundedRectangle(cornerRadius: 6)
+
+            // Border
+            RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
 
             // Content
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("\(pageNumber)")
-                    .font(.system(size: 11, weight: .medium, design: .serif))
+                    .font(.system(size: 10, weight: .medium, design: .serif))
                     .foregroundColor(Color(hex: "B0ADA8"))
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.bottom, 8)
 
-                TextEditor(text: $page.text)
-                    .font(.system(size: 14, design: .serif))
-                    .foregroundColor(Color(hex: "2D2D2D"))
-                    .scrollContentBackground(.hidden)
-                    .background(Color.clear)
+                if !page.text.isEmpty {
+                    Text(page.text)
+                        .font(.system(size: 11, design: .serif))
+                        .foregroundColor(Color(hex: "2D2D2D"))
+                        .lineLimit(nil)
+                } else {
+                    // Ruled lines
+                    VStack(spacing: height * 0.06) {
+                        ForEach(0..<10, id: \.self) { _ in
+                            Rectangle()
+                                .fill(Color(hex: "E0DDD8").opacity(0.5))
+                                .frame(height: 0.5)
+                        }
+                    }
+                    .padding(.top, 6)
+                }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .frame(width: width, height: height)
     }
