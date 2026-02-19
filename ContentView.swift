@@ -91,7 +91,7 @@ struct ContentView: View {
         GeometryReader { geometry in
             let isIPad = min(geometry.size.width, geometry.size.height) > 500
             ZStack {
-                Color(hex: "EEEFF2")
+                Color.white
                     .ignoresSafeArea()
 
                 // Background overlay: book color when opening
@@ -162,7 +162,7 @@ struct ContentView: View {
                                 }
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 5)
-                                .background(Color.white)
+                                .background(Color(hex: "EFEFEF"))
                                 .cornerRadius(1)
 
                                 Spacer()
@@ -195,7 +195,7 @@ struct ContentView: View {
                                 }
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 5)
-                                .background(Color.white)
+                                .background(Color(hex: "EFEFEF"))
                                 .cornerRadius(1)
 
                                 HStack(spacing: 4) {
@@ -233,7 +233,7 @@ struct ContentView: View {
                             handleBookTap(index: index)
                         }
                     )
-                    .frame(height: isIPad ? 532 : 418)
+                    .frame(height: isIPad ? 620 : 490)
                     .clipped()
 
                     // Title and ellipsis row
