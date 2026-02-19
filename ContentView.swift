@@ -236,26 +236,7 @@ struct ContentView: View {
                     .frame(height: isIPad ? 575 : 450)
                     .clipped()
 
-                    // Title and ellipsis row
-                    HStack {
-                        HStack(spacing: 5) {
-                            Text(notebooks[selectedIndex].title)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(uiColor)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 30)
-                        .background(uiBgColor)
-
-                        HStack {
-                            Image(systemName: "ellipsis")
-                                .font(.title)
-                                .foregroundColor(uiColor)
-                        }
-                        .padding(.vertical, 11)
-                        .padding(.horizontal, 20)
-                        .background(uiBgColor)
-                    }
+                    // Title and ellipsis row (moved to shelf overlay)
 
                     // Divider line with book name pill
                     HStack(spacing: 0) {
@@ -651,6 +632,48 @@ struct BookCarousel: View {
             .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
+            // ── Floor shadows on the shelf ──
+            HStack(alignment: .bottom, spacing: bookSpacing) {
+                ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, _ in
+                    let isSel = index == selectedIndex
+                    let dist = continuousPosition(index: index, totalBookWidth: totalBookWidth)
+                    let itemScale = scaleForDistance(dist)
+                    let vOffset = verticalOffsetForDistance(dist)
+
+                    ZStack {
+                        // Center floor ellipse
+                        Ellipse()
+                            .fill(Color.black.opacity(isSel ? 0.13 : 0.06))
+                            .frame(width: bookWidth * 1.1, height: isSel ? 36 : 18)
+                            .blur(radius: isSel ? 16 : 10)
+
+                        // Left sun shadow
+                        Ellipse()
+                            .fill(Color.black.opacity(isSel ? 0.10 : 0.04))
+                            .frame(width: bookWidth * 0.4, height: isSel ? 24 : 12)
+                            .blur(radius: isSel ? 12 : 7)
+                            .offset(x: -(bookWidth * 0.42), y: -(isSel ? 6 : 3))
+
+                        // Right sun shadow
+                        Ellipse()
+                            .fill(Color.black.opacity(isSel ? 0.10 : 0.04))
+                            .frame(width: bookWidth * 0.4, height: isSel ? 24 : 12)
+                            .blur(radius: isSel ? 12 : 7)
+                            .offset(x: bookWidth * 0.42, y: -(isSel ? 6 : 3))
+                    }
+                    .frame(width: bookWidth, height: 1)
+                    .scaleEffect(openBookIndex == index ? 1.0 : itemScale, anchor: .bottom)
+                    .offset(y: openBookIndex == index ? 0 : vOffset)
+                    .opacity(openBookIndex == nil || openBookIndex == index ? 1 : 1 - Double(openBookProgress))
+                }
+            }
+            .padding(.bottom, shelfTotal - 6)
+            .frame(height: geometry.size.height, alignment: .bottom)
+            .offset(x: baseOffset)
+            .animation(.spring(response: 0.45, dampingFraction: 0.92), value: selectedIndex)
+            .animation(.interpolatingSpring(stiffness: 300, damping: 30), value: dragOffset)
+            .allowsHitTesting(false)
+
             // ── Books ──
             HStack(alignment: .bottom, spacing: bookSpacing) {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
@@ -734,12 +757,11 @@ struct BookCarousel: View {
                         var newIndex = selectedIndex
 
                         if abs(velocity) > velocityThreshold {
-                            // Velocity-based: flick
-                            let slots = max(1, min(3, Int(abs(velocity) / 800) + 1))
+                            // Velocity-based: always move exactly 1
                             if velocity < 0 {
-                                newIndex = min(notebooks.count - 1, selectedIndex + slots)
+                                newIndex = min(notebooks.count - 1, selectedIndex + 1)
                             } else {
-                                newIndex = max(0, selectedIndex - slots)
+                                newIndex = max(0, selectedIndex - 1)
                             }
                         } else if abs(translation) > threshold {
                             // Distance-based
@@ -776,6 +798,95 @@ struct BookCarousel: View {
                 floatPhase = .pi * 2
             }
         }
+    }
+}
+
+// MARK: - 3D Button
+
+struct Button3DTopShape: Shape {
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let r = cornerRadius
+        let inset = rect.width * 0.04
+
+        // Top-left (inset)
+        path.move(to: CGPoint(x: inset + r, y: 0))
+        // Top edge
+        path.addLine(to: CGPoint(x: rect.width - inset - r, y: 0))
+        // Top-right curve
+        path.addQuadCurve(to: CGPoint(x: rect.width - inset, y: r), control: CGPoint(x: rect.width - inset, y: 0))
+        // Right edge going outward
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+        // Bottom edge
+        path.addLine(to: CGPoint(x: 0, y: rect.height))
+        // Left edge going inward
+        path.addLine(to: CGPoint(x: inset, y: r))
+        // Top-left curve
+        path.addQuadCurve(to: CGPoint(x: inset + r, y: 0), control: CGPoint(x: inset, y: 0))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct Button3D: View {
+    var label: String? = nil
+    var icon: String? = nil
+
+    private let frontHeight: CGFloat = 4
+    private let topHeight: CGFloat = 4
+    private let cornerRad: CGFloat = 5
+
+    private let topColor = Color.white
+    private let frontColor = Color(hex: "EFEFEF")
+    private let textColor = Color(hex: "888888")
+
+    var body: some View {
+        Button(action: {}) {
+            VStack(spacing: 0) {
+                // Top surface (perspective trapezoid like shelf)
+                Button3DTopShape(cornerRadius: cornerRad)
+                    .fill(topColor)
+                    .frame(height: topHeight)
+
+                // Highlight lip
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.9), Color(hex: "E0E0E0")],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(height: 0.5)
+
+                // Front face with content
+                Group {
+                    if let label = label {
+                        Text(label)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(textColor)
+                    } else if let icon = icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(textColor)
+                    }
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, label != nil ? 12 : 8)
+                .frame(minWidth: 28)
+                .frame(maxWidth: .infinity)
+                .background(frontColor)
+
+                // Bottom edge
+                Rectangle()
+                    .fill(Color(hex: "D5D5D5"))
+                    .frame(height: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
     }
 }
 
@@ -825,16 +936,6 @@ struct BookItem: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // ── Shadows (only when not opening) ──
-            if !isOpening && openProgress == 0 && isSelected {
-                // Contact shadow - tight ellipse at base only
-                Ellipse()
-                    .fill(Color.black.opacity(shadowOpacity + 0.06))
-                    .frame(width: bookWidth * 0.85, height: 10)
-                    .blur(radius: 4)
-                    .offset(y: bookHeight / 2 + 1)
-            }
-
             // ── Pages revealed behind the cover when opening ──
             if isOpening || openProgress > 0 {
                 RoundedRectangle(cornerRadius: 10)
@@ -850,7 +951,7 @@ struct BookItem: View {
                                 Rectangle()
                                     .fill(Color.black.opacity(0.05))
                                     .frame(height: 1)
-                            }
+                                #imageLiteral(resourceName: "simulator_screenshot_70DA84ED-83FD-4EFC-A204-D49DD3CF6E84.png")                   }
                         }
                         .padding(.horizontal, bookWidth * 0.15)
                         .padding(.vertical, bookHeight * 0.12)
@@ -862,6 +963,24 @@ struct BookItem: View {
             // ── The book cover ──
             BookCover(notebook: notebook, width: bookWidth, height: bookHeight)
                 .frame(width: bookWidth, height: bookHeight)
+                .overlay(alignment: .topTrailing) {
+                    if isSelected && !isOpening {
+                        Button(action: {}) {
+                            HStack(spacing: 5) {
+                                ForEach(0..<3, id: \.self) { _ in
+                                    Circle()
+                                        .fill(Color.white)
+                                        .frame(width: 5, height: 5)
+                                }
+                            }
+                        }
+                        .frame(width: 81, height: 32)
+                        .background(Color.black.opacity(0.20))
+                        .cornerRadius(0)
+                        .padding(.trailing, 8)
+                        .padding(.top, 10)
+                    }
+                }
                 .rotation3DEffect(
                     .degrees(coverOpenAngle),
                     axis: (x: 0, y: 1, z: 0),
@@ -1211,7 +1330,7 @@ struct OnboardingPrompt: View {
         .background(
             RoundedRectangle(cornerRadius: 22)
                 .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 4)
+                .shadow(color: Color.black.opacity(1), radius: 12, x: 0, y: 4)
         )
         .onTapGesture {
             onDismiss()
