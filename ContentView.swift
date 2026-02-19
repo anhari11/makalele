@@ -91,7 +91,7 @@ struct ContentView: View {
         GeometryReader { geometry in
             let isIPad = min(geometry.size.width, geometry.size.height) > 500
             ZStack {
-                Color(hex: "EDEEF0")
+                Color(hex: "EEEFF2")
                     .ignoresSafeArea()
 
                 // Background overlay: book color when opening
@@ -143,7 +143,8 @@ struct ContentView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 4)
 
-                    Spacer()
+                    Spacer(minLength: 0)
+                        .frame(maxHeight: 16)
 
                     // Aanhari x and Share with friends
                     Group {
@@ -161,7 +162,7 @@ struct ContentView: View {
                                 }
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 5)
-                                .background(uiBgColor)
+                                .background(Color.white)
                                 .cornerRadius(1)
 
                                 Spacer()
@@ -194,7 +195,7 @@ struct ContentView: View {
                                 }
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 5)
-                                .background(uiBgColor)
+                                .background(Color.white)
                                 .cornerRadius(1)
 
                                 HStack(spacing: 4) {
@@ -215,6 +216,8 @@ struct ContentView: View {
                     .offset(x: dragOffset)
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
+                    .zIndex(2)
+                    .padding(.bottom, 16)
 
                     // Notebook Carousel
                     BookCarousel(
@@ -231,6 +234,7 @@ struct ContentView: View {
                         }
                     )
                     .frame(height: isIPad ? 532 : 418)
+                    .clipped()
 
                     // Title and ellipsis row
                     HStack {
@@ -507,8 +511,7 @@ struct CircleButton<Content: View>: View {
 struct ShelfTopShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let inset = rect.width * 0.008
-        // Narrower at top (back of shelf), full width at bottom (front edge)
+        let inset = rect.width * 0.012
         path.move(to: CGPoint(x: inset, y: 0))
         path.addLine(to: CGPoint(x: rect.width - inset, y: 0))
         path.addLine(to: CGPoint(x: rect.width, y: rect.height))
@@ -531,80 +534,107 @@ struct BookCarousel: View {
     let bookTurn: CGFloat
     let onBookTap: (Int) -> Void
 
-    private var isIPad: Bool {
-        screenWidth > 500
-    }
-
-    private var bookWidth: CGFloat {
-        isIPad ? screenWidth * 0.48 : screenWidth * 0.58
-    }
-
-    private var bookHeight: CGFloat {
-        isIPad ? 456 : 342
-    }
-
-    private var bookSpacing: CGFloat {
-        isIPad ? 40 : 20
-    }
+    private var isIPad: Bool { screenWidth > 500 }
+    private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 : screenWidth * 0.58 }
+    private var bookHeight: CGFloat { isIPad ? 456 : 342 }
+    private var bookSpacing: CGFloat { isIPad ? 40 : 20 }
 
     @State private var isDragging: Bool = false
+    @State private var dragVelocity: CGFloat = 0
+    @State private var floatPhase: CGFloat = 0
 
-    /// Max Y-axis rotation per carousel slot away from center (degrees)
-    private let cabinetAngle: Double = 35
-    /// Perspective strength for the revolving effect
-    private let cabinetPerspective: Double = 0.4
+    // Physics constants
+    private let maxRotationY: Double = 25
+    private let perspectiveAmount: Double = 0.35
+    private let minScale: CGFloat = 0.32
+    private let maxScale: CGFloat = 1.0
+
+    // Shelf dimensions
+    private var shelfTopSurface: CGFloat { isIPad ? 95 : 73 }
+    private var shelfFrontFace: CGFloat { isIPad ? 32 : 24 }
+    private var shelfShadowHeight: CGFloat { isIPad ? 50 : 38 }
+    private var shelfTotal: CGFloat { shelfTopSurface + shelfFrontFace + 1.5 + shelfShadowHeight }
+
+    /// Continuous normalized position for an item (0 = center, ±1 = one slot away)
+    private func continuousPosition(index: Int, totalBookWidth: CGFloat) -> CGFloat {
+        CGFloat(index - selectedIndex) + dragOffset / totalBookWidth
+    }
+
+    /// Smooth interpolation: scale from distance — drops off quickly so side books are small
+    private func scaleForDistance(_ dist: CGFloat) -> CGFloat {
+        let t = min(abs(dist), 2.0) / 2.0
+        let curved = t * t // quadratic falloff for sharper drop
+        return maxScale - (maxScale - minScale) * curved
+    }
+
+    /// Y-axis rotation from distance — all books face straight forward
+    private func rotationForDistance(_ dist: CGFloat) -> Double {
+        return 0
+    }
+
+    /// Shadow opacity: softer when centered, stronger on sides
+    private func shadowOpacityForDistance(_ dist: CGFloat) -> Double {
+        let base = 0.12
+        let extra = min(abs(Double(dist)), 2.0) * 0.08
+        return base + extra
+    }
+
+    /// Vertical offset: selected book at front edge, others on shelf surface
+    private func verticalOffsetForDistance(_ dist: CGFloat) -> CGFloat {
+        let frontDrop = shelfTopSurface * 0.78 // selected book at front edge
+        let backDrop = shelfTopSurface * 0.31  // non-selected on shelf surface
+        let t = min(abs(dist), 1.0) / 1.0
+        return frontDrop + (backDrop - frontDrop) * t
+    }
+
+    /// Parallax factor: items further from center lag slightly
+    private func parallaxFactor(for dist: CGFloat) -> CGFloat {
+        let factor = 1.0 - min(abs(dist), 3.0) * 0.03
+        return factor
+    }
 
     var body: some View {
         GeometryReader { geometry in
             let totalBookWidth = bookWidth + bookSpacing
-            let offset = (geometry.size.width / 2) - (bookWidth / 2) - (CGFloat(selectedIndex) * totalBookWidth) + dragOffset
+            let baseOffset = (geometry.size.width / 2) - (bookWidth / 2) - (CGFloat(selectedIndex) * totalBookWidth) + dragOffset
 
-            let shelfTopSurface: CGFloat = isIPad ? 38 : 28
-            let shelfFrontFace: CGFloat = isIPad ? 28 : 20
-            let shelfShadow: CGFloat = isIPad ? 50 : 38
-            let shelfTotal = shelfTopSurface + shelfFrontFace + 1.5 + shelfShadow
-
-            // Floating shelf (positioned independently at bottom)
+            // ── Shelf ──
             VStack {
                 Spacer()
                 VStack(spacing: 0) {
-                    // Top surface of the shelf - bright white
+                    // Top surface - perspective trapezoid
                     ShelfTopShape()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "F0F0F0"), Color.white, Color.white],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .fill(Color.white)
                         .frame(height: shelfTopSurface)
-                    // Front edge lip - thin dark line
+
+                    // Highlight lip
                     Rectangle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "C8C8C8"), Color(hex: "D5D5D5")],
+                                colors: [Color.white.opacity(0.9), Color(hex: "E0E0E0")],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
-                        .frame(height: 1.5)
-                    // Front face of the shelf
+                        .frame(height: 1)
+
+                    // Front face
                     Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "EBEBEB"), Color(hex: "E2E2E2"), Color(hex: "D8D8D8")],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .fill(Color(hex: "F3F3F3"))
                         .frame(height: shelfFrontFace)
-                    // Under-shelf shade/shadow gradient
+
+                    // Bottom edge
+                    Rectangle()
+                        .fill(Color(hex: "B0B0B0"))
+                        .frame(height: 0.5)
+
+                    // Under-shelf drop shadow
                     Rectangle()
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.black.opacity(0.13),
-                                    Color.black.opacity(0.07),
+                                    Color.black.opacity(0.16),
+                                    Color.black.opacity(0.08),
                                     Color.black.opacity(0.03),
                                     Color.black.opacity(0.0)
                                 ],
@@ -612,23 +642,30 @@ struct BookCarousel: View {
                                 endPoint: .bottom
                             )
                         )
-                        .frame(height: isIPad ? 50 : 38)
+                        .frame(height: shelfShadowHeight)
                 }
+                .compositingGroup()
+                .shadow(color: Color.black.opacity(0.10), radius: 8, x: 0, y: 4)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
-            // Books
+            // ── Books ──
             HStack(alignment: .bottom, spacing: bookSpacing) {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
                     let isOpeningThis = openBookIndex == index
-                    // Continuous position relative to center (0 = centered, ±1 = one slot away, etc.)
-                    let continuousOffset = CGFloat(index - selectedIndex) + dragOffset / totalBookWidth
-                    // Rotation angle: books to the left rotate toward viewer on right edge, books to the right rotate toward viewer on left edge
-                    let rotationDeg = isOpeningThis ? 0.0 : Double(continuousOffset) * -cabinetAngle
-                    // Depth scale: centered book is full size, side books shrink slightly
-                    let depthScale = isOpeningThis ? 1.0 : max(0.82, 1.0 - abs(Double(continuousOffset)) * 0.08)
+                    let dist = continuousPosition(index: index, totalBookWidth: totalBookWidth)
+                    let itemScale = isOpeningThis ? 1.0 : scaleForDistance(dist)
+                    let rotationDeg = isOpeningThis ? 0.0 : rotationForDistance(dist)
+                    let shadowOp = shadowOpacityForDistance(dist)
+                    let vOffset = isOpeningThis ? CGFloat(0) : verticalOffsetForDistance(dist)
+                    let zIdx: Double = isOpeningThis ? 10 : Double(1000) - abs(Double(dist)) * 100
+
+                    // Micro float: only the centered book gets a subtle breathing animation
+                    let microFloat: CGFloat = (abs(dist) < 0.15 && !isOpeningThis)
+                        ? sin(floatPhase) * 1.2
+                        : 0
 
                     BookItem(
                         notebook: notebook,
@@ -639,66 +676,105 @@ struct BookCarousel: View {
                         isOpening: isOpeningThis,
                         openProgress: isOpeningThis ? openBookProgress : 0,
                         jump: isOpeningThis ? bookJump : 0,
-                        turn: isOpeningThis ? bookTurn : 0
+                        turn: isOpeningThis ? bookTurn : 0,
+                        distanceFromCenter: dist,
+                        shadowOpacity: shadowOp,
+                        scrollVelocity: dragVelocity
                     )
-                    .scaleEffect(depthScale, anchor: .bottom)
+                    .scaleEffect(itemScale, anchor: .bottom)
                     .rotation3DEffect(
                         .degrees(rotationDeg),
                         axis: (x: 0, y: 1, z: 0),
-                        perspective: cabinetPerspective
+                        perspective: perspectiveAmount
                     )
+                    .offset(y: vOffset + microFloat)
                     .opacity(openBookIndex == nil || isOpeningThis ? 1 : 1 - Double(openBookProgress))
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        onBookTap(index)
-                    }
-                    .zIndex(isOpeningThis ? 10 : Double(100 - abs(index - selectedIndex)))
+                    .onTapGesture { onBookTap(index) }
+                    .zIndex(zIdx)
                 }
             }
             .padding(.bottom, shelfTotal)
             .frame(height: geometry.size.height, alignment: .bottom)
-            .offset(x: offset)
-            .animation(.smooth(duration: 0.5), value: selectedIndex)
-            .animation(.smooth(duration: 0.15), value: dragOffset)
+            .offset(x: baseOffset)
+            .animation(.spring(response: 0.45, dampingFraction: 0.92), value: selectedIndex)
+            .animation(.interpolatingSpring(stiffness: 300, damping: 30), value: dragOffset)
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
             .gesture(
                 DragGesture(minimumDistance: 5)
                     .onChanged { value in
                         if !isDragging {
-                            withAnimation(.smooth(duration: 0.35)) {
+                            withAnimation(.spring(response: 0.2, dampingFraction: 1.0)) {
                                 isDragging = true
                             }
                         }
-                        dragOffset = value.translation.width
+                        // Rubber-band at edges
+                        let raw = value.translation.width
+                        let atLeftEdge = selectedIndex == 0 && raw > 0
+                        let atRightEdge = selectedIndex == notebooks.count - 1 && raw < 0
+                        if atLeftEdge || atRightEdge {
+                            // Rubber-band: diminishing returns
+                            let sign: CGFloat = raw > 0 ? 1 : -1
+                            dragOffset = sign * pow(abs(raw), 0.7)
+                        } else {
+                            dragOffset = raw
+                        }
+                        dragVelocity = value.velocity.width
                     }
                     .onEnded { value in
-                        let threshold: CGFloat = 50
-                        let velocity = value.predictedEndTranslation.width
+                        let velocity = value.velocity.width
+                        let translation = value.translation.width
+                        dragVelocity = 0
+
+                        // Determine how many slots to move based on velocity + distance
+                        let threshold: CGFloat = totalBookWidth * 0.3
+                        let velocityThreshold: CGFloat = 300
 
                         let oldIndex = selectedIndex
-                        withAnimation(.smooth(duration: 0.5)) {
-                            if value.translation.width < -threshold || velocity < -200 {
-                                if selectedIndex < notebooks.count - 1 {
-                                    selectedIndex += 1
-                                }
-                            } else if value.translation.width > threshold || velocity > 200 {
-                                if selectedIndex > 0 {
-                                    selectedIndex -= 1
-                                }
+                        var newIndex = selectedIndex
+
+                        if abs(velocity) > velocityThreshold {
+                            // Velocity-based: flick
+                            let slots = max(1, min(3, Int(abs(velocity) / 800) + 1))
+                            if velocity < 0 {
+                                newIndex = min(notebooks.count - 1, selectedIndex + slots)
+                            } else {
+                                newIndex = max(0, selectedIndex - slots)
                             }
-                            dragOffset = 0
-                        }
-                        if selectedIndex != oldIndex {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        } else if abs(translation) > threshold {
+                            // Distance-based
+                            if translation < 0 {
+                                newIndex = min(notebooks.count - 1, selectedIndex + 1)
+                            } else {
+                                newIndex = max(0, selectedIndex - 1)
+                            }
                         }
 
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.55)) {
+                        // Critically-damped spring snap
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.92)) {
+                            selectedIndex = newIndex
+                            dragOffset = 0
+                        }
+
+                        if newIndex != oldIndex {
+                            #if canImport(UIKit)
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            #endif
+                        }
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 1.0)) {
                                 isDragging = false
                             }
                         }
                     }
             )
+        }
+        .onAppear {
+            // Micro-float breathing loop
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                floatPhase = .pi * 2
+            }
         }
     }
 }
@@ -715,10 +791,9 @@ struct BookItem: View {
     var openProgress: CGFloat = 0
     var jump: CGFloat = 0
     var turn: CGFloat = 0
-
-    private var scale: CGFloat {
-        isSelected ? 1.0 : 0.92
-    }
+    var distanceFromCenter: CGFloat = 0
+    var shadowOpacity: Double = 0.15
+    var scrollVelocity: CGFloat = 0
 
     /// The angle the front cover rotates open (0 = closed, ~160 = fully open)
     private var coverOpenAngle: Double {
@@ -735,9 +810,32 @@ struct BookItem: View {
         openProgress * (bookWidth * 0.35)
     }
 
+    /// Motion blur amount based on scroll velocity
+    private var motionBlurRadius: CGFloat {
+        let v = abs(scrollVelocity)
+        guard v > 400 else { return 0 }
+        return min((v - 400) / 2000.0 * 2.0, 2.0)
+    }
+
+    /// Dynamic shadow X offset based on position (light from above-center)
+    private var dynamicShadowX: CGFloat {
+        let clamped = max(-2.0, min(2.0, distanceFromCenter))
+        return clamped * 4
+    }
+
     var body: some View {
-        ZStack {
-            // Pages revealed behind the cover when opening
+        ZStack(alignment: .bottom) {
+            // ── Shadows (only when not opening) ──
+            if !isOpening && openProgress == 0 && isSelected {
+                // Contact shadow - tight ellipse at base only
+                Ellipse()
+                    .fill(Color.black.opacity(shadowOpacity + 0.06))
+                    .frame(width: bookWidth * 0.85, height: 10)
+                    .blur(radius: 4)
+                    .offset(y: bookHeight / 2 + 1)
+            }
+
+            // ── Pages revealed behind the cover when opening ──
             if isOpening || openProgress > 0 {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(hex: "FCFBF7"))
@@ -747,7 +845,6 @@ struct BookItem: View {
                             .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
                     )
                     .overlay(
-                        // Page lines
                         VStack(spacing: 24) {
                             ForEach(0..<8, id: \.self) { _ in
                                 Rectangle()
@@ -762,7 +859,7 @@ struct BookItem: View {
                     .shadow(color: Color.black.opacity(0.08), radius: 4, x: 2, y: 2)
             }
 
-            // The book cover that rotates open
+            // ── The book cover ──
             BookCover(notebook: notebook, width: bookWidth, height: bookHeight)
                 .frame(width: bookWidth, height: bookHeight)
                 .rotation3DEffect(
@@ -773,6 +870,8 @@ struct BookItem: View {
                 )
         }
         .frame(width: bookWidth, height: bookHeight)
+        // Subtle motion blur during fast scrolling
+        .blur(radius: motionBlurRadius)
         // Turn the whole book
         .rotation3DEffect(
             .degrees(wholeTurnAngle),
@@ -780,11 +879,8 @@ struct BookItem: View {
             perspective: 0.3
         )
         .offset(x: centeringOffset)
-        .scaleEffect(scale, anchor: .bottom)
         // Jump offset (for open animation)
         .offset(y: jump * -40)
-        .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isSelected)
-        .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isDragging)
         .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openProgress)
         .animation(.spring(response: 0.35, dampingFraction: 0.5), value: jump)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: turn)
@@ -915,34 +1011,8 @@ struct BookCover: View {
                 endPoint: CGPoint(x: aoRect.maxX, y: rect.midY)
             ))
 
-            // 7. Studio lighting
-            let lightGrad = Gradient(stops: [
-                .init(color: Color.white.opacity(0.10), location: 0),
-                .init(color: Color.white.opacity(0.04), location: 0.25),
-                .init(color: Color.clear, location: 0.55)
-            ])
-            context.fill(bookPath, with: .radialGradient(
-                lightGrad,
-                center: CGPoint(x: size.width * 0.2, y: size.height * 0.05),
-                startRadius: 0,
-                endRadius: max(size.width, size.height) * 0.7
-            ))
-
-            // 8. Bottom-right darkening
-            let shadowGrad = Gradient(stops: [
-                .init(color: Color.clear, location: 0),
-                .init(color: Color.clear, location: 0.5),
-                .init(color: Color.black.opacity(0.04), location: 0.8),
-                .init(color: Color.black.opacity(0.10), location: 1.0)
-            ])
-            context.fill(bookPath, with: .linearGradient(
-                shadowGrad,
-                startPoint: CGPoint(x: 0, y: 0),
-                endPoint: CGPoint(x: size.width, y: size.height)
-            ))
-
-            // 9. Edge stroke
-            context.stroke(bookPath, with: .color(Color.black.opacity(0.06)), lineWidth: 0.5)
+            // 7. Edge stroke (subtle)
+            context.stroke(bookPath, with: .color(Color.black.opacity(0.04)), lineWidth: 0.5)
 
             // 10. Deep pressed title text
             let cleanTitle = String(notebook.title.unicodeScalars.filter { !$0.properties.isEmojiPresentation }).trimmingCharacters(in: .whitespaces)
