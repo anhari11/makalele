@@ -91,7 +91,7 @@ struct ContentView: View {
         GeometryReader { geometry in
             let isIPad = min(geometry.size.width, geometry.size.height) > 500
             ZStack {
-                Color.white
+                Color(hex: "EDEEF0")
                     .ignoresSafeArea()
 
                 // Background overlay: book color when opening
@@ -507,7 +507,7 @@ struct CircleButton<Content: View>: View {
 struct ShelfTopShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let inset = rect.width * 0.012
+        let inset = rect.width * 0.008
         // Narrower at top (back of shelf), full width at bottom (front edge)
         path.move(to: CGPoint(x: inset, y: 0))
         path.addLine(to: CGPoint(x: rect.width - inset, y: 0))
@@ -559,37 +559,68 @@ struct BookCarousel: View {
             let totalBookWidth = bookWidth + bookSpacing
             let offset = (geometry.size.width / 2) - (bookWidth / 2) - (CGFloat(selectedIndex) * totalBookWidth) + dragOffset
 
-            let shelfTopSurface: CGFloat = isIPad ? 38 : 30
-            let shelfFrontFace: CGFloat = isIPad ? 14 : 11
-            let shelfTotal = shelfTopSurface + shelfFrontFace + 1
+            let shelfTopSurface: CGFloat = isIPad ? 38 : 28
+            let shelfFrontFace: CGFloat = isIPad ? 28 : 20
+            let shelfShadow: CGFloat = isIPad ? 50 : 38
+            let shelfTotal = shelfTopSurface + shelfFrontFace + 1.5 + shelfShadow
 
-            ZStack(alignment: .bottom) {
-                // Floating shelf
+            // Floating shelf (positioned independently at bottom)
+            VStack {
+                Spacer()
                 VStack(spacing: 0) {
+                    // Top surface of the shelf - bright white
                     ShelfTopShape()
-                        .fill(Color.white)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "F0F0F0"), Color.white, Color.white],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                         .frame(height: shelfTopSurface)
-                    Rectangle()
-                        .fill(Color(hex: "E8E8E8"))
-                        .frame(height: 1)
+                    // Front edge lip - thin dark line
                     Rectangle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "FCFCFC"), Color(hex: "F5F5F5")],
+                                colors: [Color(hex: "C8C8C8"), Color(hex: "D5D5D5")],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: 1.5)
+                    // Front face of the shelf
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "EBEBEB"), Color(hex: "E2E2E2"), Color(hex: "D8D8D8")],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
                         .frame(height: shelfFrontFace)
+                    // Under-shelf shade/shadow gradient
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.black.opacity(0.13),
+                                    Color.black.opacity(0.07),
+                                    Color.black.opacity(0.03),
+                                    Color.black.opacity(0.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: isIPad ? 50 : 38)
                 }
-                .frame(width: geometry.size.width * 0.88)
-                .compositingGroup()
-                .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 5)
-                .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
-                .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
+            .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
-                // Books
-                HStack(alignment: .bottom, spacing: bookSpacing) {
+            // Books
+            HStack(alignment: .bottom, spacing: bookSpacing) {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
                     let isOpeningThis = openBookIndex == index
                     // Continuous position relative to center (0 = centered, ±1 = one slot away, etc.)
@@ -610,7 +641,7 @@ struct BookCarousel: View {
                         jump: isOpeningThis ? bookJump : 0,
                         turn: isOpeningThis ? bookTurn : 0
                     )
-                    .scaleEffect(depthScale)
+                    .scaleEffect(depthScale, anchor: .bottom)
                     .rotation3DEffect(
                         .degrees(rotationDeg),
                         axis: (x: 0, y: 1, z: 0),
@@ -668,7 +699,6 @@ struct BookCarousel: View {
                         }
                     }
             )
-            }
         }
     }
 }
@@ -685,14 +715,6 @@ struct BookItem: View {
     var openProgress: CGFloat = 0
     var jump: CGFloat = 0
     var turn: CGFloat = 0
-
-    private var isElevated: Bool {
-        isSelected && !isDragging
-    }
-
-    private var elevation: CGFloat {
-        isElevated ? -30 : 0
-    }
 
     private var scale: CGFloat {
         isSelected ? 1.0 : 0.92
@@ -758,9 +780,9 @@ struct BookItem: View {
             perspective: 0.3
         )
         .offset(x: centeringOffset)
-        .scaleEffect(scale)
-        // Jump + elevation
-        .offset(y: elevation + (jump * -40))
+        .scaleEffect(scale, anchor: .bottom)
+        // Jump offset (for open animation)
+        .offset(y: jump * -40)
         .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isSelected)
         .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isDragging)
         .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openProgress)
