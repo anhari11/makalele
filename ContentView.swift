@@ -502,6 +502,22 @@ struct CircleButton<Content: View>: View {
     }
 }
 
+// MARK: - Shelf Shape
+
+struct ShelfTopShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let inset = rect.width * 0.012
+        // Narrower at top (back of shelf), full width at bottom (front edge)
+        path.move(to: CGPoint(x: inset, y: 0))
+        path.addLine(to: CGPoint(x: rect.width - inset, y: 0))
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+        path.addLine(to: CGPoint(x: 0, y: rect.height))
+        path.closeSubpath()
+        return path
+    }
+}
+
 // MARK: - Book Carousel
 
 struct BookCarousel: View {
@@ -543,7 +559,37 @@ struct BookCarousel: View {
             let totalBookWidth = bookWidth + bookSpacing
             let offset = (geometry.size.width / 2) - (bookWidth / 2) - (CGFloat(selectedIndex) * totalBookWidth) + dragOffset
 
-            HStack(alignment: .bottom, spacing: bookSpacing) {
+            let shelfTopSurface: CGFloat = isIPad ? 38 : 30
+            let shelfFrontFace: CGFloat = isIPad ? 14 : 11
+            let shelfTotal = shelfTopSurface + shelfFrontFace + 1
+
+            ZStack(alignment: .bottom) {
+                // Floating shelf
+                VStack(spacing: 0) {
+                    ShelfTopShape()
+                        .fill(Color.white)
+                        .frame(height: shelfTopSurface)
+                    Rectangle()
+                        .fill(Color(hex: "E8E8E8"))
+                        .frame(height: 1)
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "FCFCFC"), Color(hex: "F5F5F5")],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(height: shelfFrontFace)
+                }
+                .frame(width: geometry.size.width * 0.88)
+                .compositingGroup()
+                .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 5)
+                .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
+                .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
+
+                // Books
+                HStack(alignment: .bottom, spacing: bookSpacing) {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
                     let isOpeningThis = openBookIndex == index
                     // Continuous position relative to center (0 = centered, ±1 = one slot away, etc.)
@@ -578,6 +624,7 @@ struct BookCarousel: View {
                     .zIndex(isOpeningThis ? 10 : Double(100 - abs(index - selectedIndex)))
                 }
             }
+            .padding(.bottom, shelfTotal)
             .frame(height: geometry.size.height, alignment: .bottom)
             .offset(x: offset)
             .animation(.smooth(duration: 0.5), value: selectedIndex)
@@ -621,6 +668,7 @@ struct BookCarousel: View {
                         }
                     }
             )
+            }
         }
     }
 }
