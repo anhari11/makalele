@@ -487,6 +487,35 @@ struct CircleButton<Content: View>: View {
     }
 }
 
+// MARK: - Book Floor Shadow Shape
+
+enum FloorShadowSide { case left, right }
+
+struct BookFloorShadow: Shape {
+    let side: FloorShadowSide
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        switch side {
+        case .left:
+            // Wedge: starts narrow at top-right (book corner), fans out to bottom-left
+            path.move(to: CGPoint(x: rect.maxX, y: 0))
+            path.addLine(to: CGPoint(x: rect.maxX * 0.7, y: 0))
+            path.addLine(to: CGPoint(x: 0, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX * 0.5, y: rect.maxY))
+            path.closeSubpath()
+        case .right:
+            // Wedge: starts narrow at top-left (book corner), fans out to bottom-right
+            path.move(to: CGPoint(x: 0, y: 0))
+            path.addLine(to: CGPoint(x: rect.maxX * 0.3, y: 0))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX * 0.5, y: rect.maxY))
+            path.closeSubpath()
+        }
+        return path
+    }
+}
+
 // MARK: - Shelf Shape
 
 struct ShelfTopShape: Shape {
@@ -631,48 +660,6 @@ struct BookCarousel: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
             .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
-
-            // ── Floor shadows on the shelf ──
-            HStack(alignment: .bottom, spacing: bookSpacing) {
-                ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, _ in
-                    let isSel = index == selectedIndex
-                    let dist = continuousPosition(index: index, totalBookWidth: totalBookWidth)
-                    let itemScale = scaleForDistance(dist)
-                    let vOffset = verticalOffsetForDistance(dist)
-
-                    ZStack {
-                        // Center floor ellipse
-                        Ellipse()
-                            .fill(Color.black.opacity(isSel ? 0.13 : 0.06))
-                            .frame(width: bookWidth * 1.1, height: isSel ? 36 : 18)
-                            .blur(radius: isSel ? 16 : 10)
-
-                        // Left sun shadow
-                        Ellipse()
-                            .fill(Color.black.opacity(isSel ? 0.10 : 0.04))
-                            .frame(width: bookWidth * 0.4, height: isSel ? 24 : 12)
-                            .blur(radius: isSel ? 12 : 7)
-                            .offset(x: -(bookWidth * 0.42), y: -(isSel ? 6 : 3))
-
-                        // Right sun shadow
-                        Ellipse()
-                            .fill(Color.black.opacity(isSel ? 0.10 : 0.04))
-                            .frame(width: bookWidth * 0.4, height: isSel ? 24 : 12)
-                            .blur(radius: isSel ? 12 : 7)
-                            .offset(x: bookWidth * 0.42, y: -(isSel ? 6 : 3))
-                    }
-                    .frame(width: bookWidth, height: 1)
-                    .scaleEffect(openBookIndex == index ? 1.0 : itemScale, anchor: .bottom)
-                    .offset(y: openBookIndex == index ? 0 : vOffset)
-                    .opacity(openBookIndex == nil || openBookIndex == index ? 1 : 1 - Double(openBookProgress))
-                }
-            }
-            .padding(.bottom, shelfTotal - 6)
-            .frame(height: geometry.size.height, alignment: .bottom)
-            .offset(x: baseOffset)
-            .animation(.spring(response: 0.45, dampingFraction: 0.92), value: selectedIndex)
-            .animation(.interpolatingSpring(stiffness: 300, damping: 30), value: dragOffset)
-            .allowsHitTesting(false)
 
             // ── Books ──
             HStack(alignment: .bottom, spacing: bookSpacing) {
@@ -951,7 +938,7 @@ struct BookItem: View {
                                 Rectangle()
                                     .fill(Color.black.opacity(0.05))
                                     .frame(height: 1)
-                                #imageLiteral(resourceName: "simulator_screenshot_70DA84ED-83FD-4EFC-A204-D49DD3CF6E84.png")                   }
+                            }
                         }
                         .padding(.horizontal, bookWidth * 0.15)
                         .padding(.vertical, bookHeight * 0.12)
@@ -989,6 +976,26 @@ struct BookItem: View {
                 )
         }
         .frame(width: bookWidth, height: bookHeight)
+        // Gradient shadow behind the book — peeks out at the left (sun from right)
+        .background(alignment: .leading) {
+            if !isOpening && openProgress == 0 {
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(isSelected ? 0.22 : 0.08),
+                        Color.black.opacity(isSelected ? 0.10 : 0.03),
+                        Color.clear
+                    ],
+                    startPoint: .trailing,
+                    endPoint: .leading
+                )
+                .frame(width: bookWidth * 0.35, height: bookHeight * 0.92)
+                .blur(radius: isSelected ? 12 : 7)
+                .offset(x: -bookWidth * 0.15)
+            }
+        }
+        // Sun from the right — shadow casts to the left
+        .shadow(color: Color.black.opacity(isSelected ? 0.18 : 0.08), radius: isSelected ? 22 : 12, x: isSelected ? -18 : -10, y: isSelected ? 12 : 6)
+        .shadow(color: Color.black.opacity(isSelected ? 0.10 : 0.04), radius: isSelected ? 6 : 3, x: isSelected ? -6 : -3, y: isSelected ? 4 : 2)
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         // Turn the whole book
