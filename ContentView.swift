@@ -217,7 +217,7 @@ struct ContentView: View {
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
                     .zIndex(2)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 4)
 
                     // Notebook Carousel
                     BookCarousel(
@@ -233,7 +233,7 @@ struct ContentView: View {
                             handleBookTap(index: index)
                         }
                     )
-                    .frame(height: isIPad ? 620 : 490)
+                    .frame(height: isIPad ? 575 : 450)
                     .clipped()
 
                     // Title and ellipsis row
