@@ -936,6 +936,16 @@ struct BookItem: View {
         return clamped * 4
     }
 
+    /// 0 = centered (selected), 1 = fully away (non-selected). Smooth interpolation.
+    private var shadeFactor: CGFloat {
+        min(abs(distanceFromCenter), 1.0)
+    }
+
+    /// Linearly interpolate between two values based on shadeFactor
+    private func shadeLerp(_ selected: CGFloat, _ nonSelected: CGFloat) -> CGFloat {
+        selected + (nonSelected - selected) * shadeFactor
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             // ── Pages revealed behind the cover when opening ──
@@ -995,10 +1005,10 @@ struct BookItem: View {
         .background(alignment: .bottomLeading) {
             if !isOpening && openProgress == 0 {
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(isSelected ? 0.30 : 0.20))
-                    .frame(width: bookWidth * (isSelected ? 0.21 : 0.16), height: bookHeight * (isSelected ? 0.78 : 0.58))
-                    .blur(radius: isSelected ? 16 : 14)
-                    .offset(x: -bookWidth * (isSelected ? 0.18 : 0.12), y: -bookHeight * 0.04)
+                    .fill(Color.black.opacity(shadeLerp(0.30, 0.20)))
+                    .frame(width: bookWidth * shadeLerp(0.18, 0.16), height: bookHeight * shadeLerp(0.78, 0.70))
+                    .blur(radius: shadeLerp(13, 14))
+                    .offset(x: -bookWidth * shadeLerp(0.15, 0.12), y: -bookHeight * 0.04)
             }
         }
         // Diagonal shade from book's bottom-left corner up-left to vertical shade
@@ -1008,22 +1018,22 @@ struct BookItem: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.black.opacity(isSelected ? 0.12 : 0.08),
-                                Color.black.opacity(isSelected ? 0.05 : 0.03),
+                                Color.black.opacity(shadeLerp(0.12, 0.08)),
+                                Color.black.opacity(shadeLerp(0.05, 0.03)),
                                 Color.clear
                             ],
                             startPoint: .bottomTrailing,
                             endPoint: .topLeading
                         )
                     )
-                    .frame(width: bookWidth * (isSelected ? 0.18 : 0.14), height: bookHeight * (isSelected ? 0.21 : 0.20))
-                    .blur(radius: isSelected ? 6 : 5)
-                    .offset(x: -bookWidth * (isSelected ? 0.18 : 0.14))
+                    .frame(width: bookWidth * shadeLerp(0.18, 0.14), height: bookHeight * shadeLerp(0.21, 0.20))
+                    .blur(radius: shadeLerp(6, 5))
+                    .offset(x: -bookWidth * shadeLerp(0.18, 0.14))
             }
         }
         // Sun from the right — shadow casts to the left
-        .shadow(color: Color.black.opacity(isSelected ? 0.22 : 0.12), radius: isSelected ? 18 : 10, x: isSelected ? -15 : -8, y: isSelected ? 18 : 10)
-        .shadow(color: Color.black.opacity(isSelected ? 0.12 : 0.06), radius: isSelected ? 6 : 3, x: isSelected ? -6 : -3, y: isSelected ? 6 : 3)
+        .shadow(color: Color.black.opacity(shadeLerp(0.22, 0.12)), radius: shadeLerp(18, 10), x: shadeLerp(-15, -8), y: shadeLerp(18, 10))
+        .shadow(color: Color.black.opacity(shadeLerp(0.12, 0.06)), radius: shadeLerp(6, 3), x: shadeLerp(-6, -3), y: shadeLerp(6, 3))
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         // Turn the whole book
