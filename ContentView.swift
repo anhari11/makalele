@@ -62,7 +62,7 @@ struct ContentView: View {
     @State private var newBookTitle: String = ""
     @State private var cursorVisible: Bool = false
     @State private var cursorTimer: Timer? = nil
-    @State private var initialDrop: CGFloat = 0
+    @State private var initialAppear: [CGFloat] = []
     @State private var hasAppeared: Bool = false
     @FocusState private var isTitleFieldFocused: Bool
 
@@ -210,7 +210,8 @@ struct ContentView: View {
                                 .foregroundStyle(.black)
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 13.5)
+                            .padding(.vertical, 13.5
+                            )
                             .background(Color(hex: "EFEFEF"))
                            
                         }
@@ -336,15 +337,20 @@ struct ContentView: View {
                         },
                         newBookDrop: newBookDrop,
                         droppingBookIndex: droppingBookIndex,
-                        initialDrop: initialDrop
+                        initialAppear: initialAppear
                     )
                     .frame(height: isIPad ? 575 : 450)
                     .onAppear {
                         if !hasAppeared {
                             hasAppeared = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                withAnimation(.spring(response: 0.5, dampingFraction: 0.45)) {
-                                    initialDrop = 1
+                            initialAppear = Array(repeating: 0, count: notebooks.count)
+                            // Stagger books appearing from right to left
+                            for i in (0..<notebooks.count).reversed() {
+                                let delay = 0.15 + Double(notebooks.count - 1 - i) * 0.12
+                                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                                    withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                                        initialAppear[i] = 1
+                                    }
                                 }
                             }
                             // Pre-warm keyboard during entrance animation
@@ -805,7 +811,7 @@ struct BookCarousel: View {
     let onBookTap: (Int) -> Void
     var newBookDrop: CGFloat = 1
     var droppingBookIndex: Int? = nil
-    var initialDrop: CGFloat = 1
+    var initialAppear: [CGFloat] = []
 
     private var isIPad: Bool { screenWidth > 500 }
     private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 : screenWidth * 0.58 }
@@ -953,7 +959,8 @@ struct BookCarousel: View {
                         distanceFromCenter: dist,
                         shadowOpacity: shadowOp,
                         scrollVelocity: dragVelocity,
-                        dropProgress: index == droppingBookIndex ? newBookDrop : initialDrop
+                        dropProgress: index == droppingBookIndex ? newBookDrop : (index < initialAppear.count ? initialAppear[index] : 1),
+                        slideFromRight: index != droppingBookIndex
                     )
                     .scaleEffect(itemScale, anchor: .bottom)
                     .rotation3DEffect(
@@ -1157,6 +1164,7 @@ struct BookItem: View {
     var shadowOpacity: Double = 0.15
     var scrollVelocity: CGFloat = 0
     var dropProgress: CGFloat = 1
+    var slideFromRight: Bool = false
 
     /// Drop offset: starts 500pt below, rises to 0
     private var dropOffset: CGFloat {
@@ -1305,10 +1313,10 @@ struct BookItem: View {
         .offset(x: centeringOffset)
         // Jump offset (for open animation)
         .offset(y: jump * -40)
-        // Drop from above animation
-        .offset(y: dropOffset)
+        // Entrance animation: slide from right or drop from above
+        .offset(x: slideFromRight ? dropOffset : 0, y: slideFromRight ? 0 : dropOffset)
         .rotation3DEffect(
-            .degrees(dropTilt),
+            .degrees(slideFromRight ? 0 : dropTilt),
             axis: (x: 0, y: 0, z: 1)
         )
         .opacity(dropProgress < 0.01 ? 0 : 1)
