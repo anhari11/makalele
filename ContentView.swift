@@ -976,26 +976,20 @@ struct BookItem: View {
                 )
         }
         .frame(width: bookWidth, height: bookHeight)
-        // Gradient shadow behind the book — peeks out at the left (sun from right)
+        // Wide soft glow shadow
         .background(alignment: .leading) {
             if !isOpening && openProgress == 0 {
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(isSelected ? 0.22 : 0.08),
-                        Color.black.opacity(isSelected ? 0.10 : 0.03),
-                        Color.clear
-                    ],
-                    startPoint: .trailing,
-                    endPoint: .leading
-                )
-                .frame(width: bookWidth * 0.35, height: bookHeight * 0.92)
-                .blur(radius: isSelected ? 12 : 7)
-                .offset(x: -bookWidth * 0.15)
+                // Soft wide shadow glow at the left of the book
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.black.opacity(isSelected ? 0.30 : 0.06))
+                    .frame(width: bookWidth * (isSelected ? 0.28 : 0.10), height: bookHeight * (isSelected ? 0.88 : 0.50))
+                    .blur(radius: isSelected ? 22 : 7)
+                    .offset(x: -bookWidth * (isSelected ? 0.24 : 0.06), y: bookHeight * 0.03)
             }
         }
         // Sun from the right — shadow casts to the left
-        .shadow(color: Color.black.opacity(isSelected ? 0.18 : 0.08), radius: isSelected ? 22 : 12, x: isSelected ? -18 : -10, y: isSelected ? 12 : 6)
-        .shadow(color: Color.black.opacity(isSelected ? 0.10 : 0.04), radius: isSelected ? 6 : 3, x: isSelected ? -6 : -3, y: isSelected ? 4 : 2)
+        .shadow(color: Color.black.opacity(isSelected ? 0.22 : 0.05), radius: isSelected ? 24 : 6, x: isSelected ? -20 : -5, y: isSelected ? 14 : 3)
+        .shadow(color: Color.black.opacity(isSelected ? 0.12 : 0.02), radius: isSelected ? 8 : 2, x: isSelected ? -8 : -2, y: isSelected ? 5 : 1)
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         // Turn the whole book
@@ -1082,10 +1076,10 @@ struct BookCover: View {
             let g1Rect = CGRect(x: groove1X - 3, y: 0, width: 7, height: size.height)
             let g1Path = Path(g1Rect).intersection(bookPath)
             let g1Grad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.22), location: 0),
-                .init(color: Color.black.opacity(0.28), location: 0.45),
-                .init(color: Color.black.opacity(0.10), location: 0.6),
-                .init(color: Color.white.opacity(0.10), location: 0.85),
+                .init(color: Color.black.opacity(0.26), location: 0),
+                .init(color: Color.black.opacity(0.34), location: 0.45),
+                .init(color: Color.black.opacity(0.12), location: 0.6),
+                .init(color: Color.white.opacity(0.08), location: 0.85),
                 .init(color: Color.clear, location: 1.0)
             ])
             context.fill(g1Path, with: .linearGradient(
@@ -1098,10 +1092,10 @@ struct BookCover: View {
             let g2Rect = CGRect(x: groove2X - 0.75, y: 0, width: 2, height: size.height)
             let g2Path = Path(g2Rect).intersection(bookPath)
             let g2Grad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.18), location: 0),
-                .init(color: Color.black.opacity(0.22), location: 0.4),
+                .init(color: Color.black.opacity(0.22), location: 0),
+                .init(color: Color.black.opacity(0.26), location: 0.4),
                 .init(color: Color.clear, location: 0.6),
-                .init(color: Color.white.opacity(0.08), location: 0.9),
+                .init(color: Color.white.opacity(0.06), location: 0.9),
                 .init(color: Color.clear, location: 1.0)
             ])
             context.fill(g2Path, with: .linearGradient(
@@ -1114,8 +1108,8 @@ struct BookCover: View {
             let lipRect = CGRect(x: groove2X + 3, y: 0, width: 6, height: size.height)
             let lipPath = Path(lipRect).intersection(bookPath)
             let lipGrad = Gradient(stops: [
-                .init(color: Color.white.opacity(0.14), location: 0),
-                .init(color: Color.white.opacity(0.06), location: 0.3),
+                .init(color: Color.white.opacity(0.11), location: 0),
+                .init(color: Color.white.opacity(0.05), location: 0.3),
                 .init(color: Color.clear, location: 1.0)
             ])
             context.fill(lipPath, with: .linearGradient(
@@ -1128,7 +1122,7 @@ struct BookCover: View {
             let aoRect = CGRect(x: groove2X + 2, y: 0, width: 3, height: size.height)
             let aoPath = Path(aoRect).intersection(bookPath)
             let aoGrad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.08), location: 0),
+                .init(color: Color.black.opacity(0.10), location: 0),
                 .init(color: Color.clear, location: 1.0)
             ])
             context.fill(aoPath, with: .linearGradient(
