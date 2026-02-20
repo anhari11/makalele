@@ -148,12 +148,65 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 50)
                     
-                    Spacer()
+                    ZStack {
+                        // Centered: title + ellipsis
+                        HStack(spacing: 4) {
+                            Button(action: {}) {
+                                Text(notebooks[selectedIndex].title)
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundColor(.black)
+                            }
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 14)
+                            .background(Color(hex: "EFEFEF"))
+                            Button(action: {}) {
+                                HStack(spacing: 6) {   // 👈 control spacing here
+                                    Circle()
+                                        .frame(width: 5, height: 5)
+                                    Circle()
+                                        .frame(width: 5, height: 5)
+                                    Circle()
+                                        .frame(width: 5, height: 5)
+                                }
+                                .foregroundStyle(.black)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 13.5)
+                            .background(Color(hex: "EFEFEF"))
+                           
+                        }
+                        .offset(x: dragOffset)
 
-                    Spacer(minLength: 0)
-                        .frame(maxHeight: 16)
+                        // Right-aligned: Make a new album (iPad only)
+                        if isIPad {
+                            HStack {
+                                Spacer()
+                                HStack(alignment: .center, spacing: 6) {
+                                    Image("new2")
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 75, height: 75)
+                                        .clipShape(Circle())
+                                        .opacity(1 - Double(openBookProgress) * 0.5)
+
+                                    Text("Make a new album")
+                                        .foregroundStyle(Color.black)
+                                        .fontWeight(.bold)
+                                        .font(.system(size: 17))
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 17, weight: .bold))
+                                        .foregroundColor(Color(hex: "#898988"))
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .animation(.smooth(duration: 0.5), value: selectedIndex)
+                    .animation(.smooth(duration: 0.15), value: dragOffset)
+                    .padding(.bottom, 40)
 
                     // Aanhari x and Share with friends
                     Group {
@@ -248,50 +301,83 @@ struct ContentView: View {
                     // Title and ellipsis row (moved to shelf overlay)
 
                     // Divider line with book name pill
-                    HStack(spacing: 0) {
-                        Rectangle()
-                            .fill(openBookProgress > 0 ? Color.white.opacity(0.15) : Color(hex: "E0E0E0"))
-                            .frame(height: 1)
+                    //HStack(spacing: 0) {
+                      //  Rectangle()
+                        //    .fill(openBookProgress > 0 ? //Color.white.opacity(0.15) : Color(hex: "E0E0E0"))
+                            //.frame(height: 1)
 
-                        HStack(spacing: 4) {
-                            Button(action: {}) {
-                                Text(formattedCreationDate)
-                                    .foregroundColor(openBookProgress > 0 ? Color.white.opacity(0.7) : .black)
-                                    .font(.system(size: 16))
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 2)
-                            .background(openBookProgress > 0 ? Color.clear : Color(hex: "#EFEFEF"))
+                        //HStack(spacing: 4) {
+                          //  Button(action: {}) {
+                            //    Text(formattedCreationDate)
+                                  //  .foregroundColor(openBookProgress > 0 ? Color.white.opacity(0.7) : .black)
+                                    //.font(.system(size: 16))
+                            //}
+                            //.padding(.horizontal, 10)
+                            //.padding(.vertical, 2)
+                            //.background(openBookProgress > 0 ? Color.clear : Color(hex: "#EFEFEF"))
 
-                            Text("by")
-                                .foregroundStyle(openBookProgress > 0 ? uiColor.opacity(0.6) : Color(hex: "#898988"))
+                            //Text("by")
+                              //  .foregroundStyle(openBookProgress > 0 ? uiColor.opacity(0.6) : Color(hex: "#898988"))
 
-                            Text("@aanhari")
-                                .foregroundStyle(uiColor)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 0)
-                                .fill(openBookProgress > 0 ? Color.white.opacity(0.15) : Color.white)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 0)
-                                        .stroke(openBookProgress > 0 ? Color.white.opacity(0.15) : Color(hex: "E0E0E0"), lineWidth: 1)
-                                )
-                        )
-                        .fixedSize()
+                            //Text("@aanhari")
+                              //  .foregroundStyle(uiColor)
+                        //}
+                        
+                       // .padding(.horizontal, 16)
+                        //.padding(.vertical, 8)
+                        //.background(
+                          //  RoundedRectangle(cornerRadius: 0)
+                            //    .fill(openBookProgress > 0 ? Color.white.opacity(0.15) : Color.white)
+                                //.overlay(
+                                  //  RoundedRectangle(cornerRadius: 0)
+                                    //    .stroke(openBookProgress > 0 ? Color.white.opacity(0.15) : Color(hex: "E0E0E0"), lineWidth: 1)
+                              //  )
+                       // )
+                      //  .fixedSize()
+                        
+                       
+                        
+                        
 
-                        Rectangle()
-                            .fill(openBookProgress > 0 ? Color.white.opacity(0.15) : Color(hex: "E0E0E0"))
-                            .frame(height: 1)
-                    }
-                    .padding(.top, 12)
-                    .animation(.smooth(duration: 0.4), value: selectedIndex)
+                       // Rectangle()
+                         //   .fill(openBookProgress > 0 ? Color.white.opacity(0.15) : Color(hex: "E0E0E0"))
+                           // .frame(height: 1)
+                    //}
+                    //.padding(.top, 12)
+                    //.animation(.smooth(duration: 0.4), value: selectedIndex)
 
                     Spacer()
+
+                    // Make a new album (mobile only, at bottom)
+                    if !isIPad {
+                        HStack(alignment: .center, spacing: 6) {
+                            Spacer()
+                            Image("new2")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 75, height: 75)
+                                .clipShape(Circle())
+                                .opacity(1 - Double(openBookProgress) * 0.5)
+
+                            Text("Make a new album")
+                                .foregroundStyle(Color.black)
+                                .fontWeight(.bold)
+                                .font(.system(size: 17))
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundColor(Color(hex: "#898988"))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    }
                 }
                 .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                 .allowsHitTesting(openBookIndex == nil)
+                
+           
+
 
                 // Tap anywhere to close the open book
                 if openBookIndex != nil && !showFullBook {
@@ -303,7 +389,8 @@ struct ContentView: View {
                         }
                         .zIndex(4)
                 }
-
+                
+              
                 // Full open book view
                 if let openIndex = openBookIndex, showFullBook {
                     CarouselBookView(
@@ -545,9 +632,8 @@ struct BookFloorShadow: Shape {
 struct ShelfTopShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let inset = rect.width * 0.012
-        path.move(to: CGPoint(x: inset, y: 0))
-        path.addLine(to: CGPoint(x: rect.width - inset, y: 0))
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: rect.width, y: 0))
         path.addLine(to: CGPoint(x: rect.width, y: rect.height))
         path.addLine(to: CGPoint(x: 0, y: rect.height))
         path.closeSubpath()
