@@ -992,13 +992,13 @@ struct BookItem: View {
         }
         .frame(width: bookWidth, height: bookHeight)
         // Vertical shade along the left edge
-        .background(alignment: .leading) {
+        .background(alignment: .bottomLeading) {
             if !isOpening && openProgress == 0 {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.black.opacity(isSelected ? 0.30 : 0.20))
-                    .frame(width: bookWidth * (isSelected ? 0.28 : 0.16), height: bookHeight * (isSelected ? 0.88 : 0.70))
-                    .blur(radius: isSelected ? 22 : 14)
-                    .offset(x: -bookWidth * (isSelected ? 0.24 : 0.12), y: bookHeight * 0.03)
+                    .frame(width: bookWidth * (isSelected ? 0.21 : 0.16), height: bookHeight * (isSelected ? 0.78 : 0.58))
+                    .blur(radius: isSelected ? 16 : 14)
+                    .offset(x: -bookWidth * (isSelected ? 0.18 : 0.12), y: -bookHeight * 0.04)
             }
         }
         // Diagonal shade from book's bottom-left corner up-left to vertical shade
@@ -1016,14 +1016,14 @@ struct BookItem: View {
                             endPoint: .topLeading
                         )
                     )
-                    .frame(width: bookWidth * (isSelected ? 0.24 : 0.14), height: bookHeight * (isSelected ? 0.28 : 0.20))
-                    .blur(radius: isSelected ? 8 : 5)
-                    .offset(x: -bookWidth * (isSelected ? 0.24 : 0.14))
+                    .frame(width: bookWidth * (isSelected ? 0.18 : 0.14), height: bookHeight * (isSelected ? 0.21 : 0.20))
+                    .blur(radius: isSelected ? 6 : 5)
+                    .offset(x: -bookWidth * (isSelected ? 0.18 : 0.14))
             }
         }
         // Sun from the right — shadow casts to the left
-        .shadow(color: Color.black.opacity(isSelected ? 0.22 : 0.12), radius: isSelected ? 24 : 10, x: isSelected ? -20 : -8, y: isSelected ? 14 : 5)
-        .shadow(color: Color.black.opacity(isSelected ? 0.12 : 0.06), radius: isSelected ? 8 : 3, x: isSelected ? -8 : -3, y: isSelected ? 5 : 2)
+        .shadow(color: Color.black.opacity(isSelected ? 0.22 : 0.12), radius: isSelected ? 18 : 10, x: isSelected ? -15 : -8, y: isSelected ? 18 : 10)
+        .shadow(color: Color.black.opacity(isSelected ? 0.12 : 0.06), radius: isSelected ? 6 : 3, x: isSelected ? -6 : -3, y: isSelected ? 6 : 3)
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         // Turn the whole book
