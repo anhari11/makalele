@@ -55,6 +55,8 @@ struct ContentView: View {
     @State private var currentPage: Int = 0
     @State private var flipProgress: CGFloat = 0
     @State private var showFullBook: Bool = false
+    @State private var newBookDrop: CGFloat = 1
+    @State private var isAddingBook: Bool = false
 
     private func formattedCreationDate(for date: Date) -> String {
         let formatter = DateFormatter()
@@ -183,23 +185,26 @@ struct ContentView: View {
                         if isIPad {
                             HStack {
                                 Spacer()
-                                HStack(alignment: .center, spacing: 6) {
-                                    Image("new2")
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 75, height: 75)
-                                        .clipShape(Circle())
-                                        .opacity(1 - Double(openBookProgress) * 0.5)
+                                Button(action: { addNewAlbum() }) {
+                                    HStack(alignment: .center, spacing: 6) {
+                                        Image("new2")
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 75, height: 75)
+                                            .clipShape(Circle())
+                                            .opacity(1 - Double(openBookProgress) * 0.5)
 
-                                    Text("Make a new album")
-                                        .foregroundStyle(Color.black)
-                                        .fontWeight(.bold)
-                                        .font(.system(size: 17))
+                                        Text("Make a new album")
+                                            .foregroundStyle(Color.black)
+                                            .fontWeight(.bold)
+                                            .font(.system(size: 17))
 
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 17, weight: .bold))
-                                        .foregroundColor(Color(hex: "#898988"))
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 17, weight: .bold))
+                                            .foregroundColor(Color(hex: "#898988"))
+                                    }
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -293,10 +298,10 @@ struct ContentView: View {
                         bookTurn: bookTurn,
                         onBookTap: { index in
                             handleBookTap(index: index)
-                        }
+                        },
+                        newBookDrop: newBookDrop
                     )
                     .frame(height: isIPad ? 575 : 450)
-                    .clipped()
 
                     // Title and ellipsis row (moved to shelf overlay)
 
@@ -350,25 +355,28 @@ struct ContentView: View {
 
                     // Make a new album (mobile only, at bottom)
                     if !isIPad {
-                        HStack(alignment: .center, spacing: 6) {
-                            Spacer()
-                            Image("new2")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 75, height: 75)
-                                .clipShape(Circle())
-                                .opacity(1 - Double(openBookProgress) * 0.5)
+                        Button(action: { addNewAlbum() }) {
+                            HStack(alignment: .center, spacing: 6) {
+                                Spacer()
+                                Image("new2")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 75, height: 75)
+                                    .clipShape(Circle())
+                                    .opacity(1 - Double(openBookProgress) * 0.5)
 
-                            Text("Make a new album")
-                                .foregroundStyle(Color.black)
-                                .fontWeight(.bold)
-                                .font(.system(size: 17))
+                                Text("Make a new album")
+                                    .foregroundStyle(Color.black)
+                                    .fontWeight(.bold)
+                                    .font(.system(size: 17))
 
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 17, weight: .bold))
-                                .foregroundColor(Color(hex: "#898988"))
-                            Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundColor(Color(hex: "#898988"))
+                                Spacer()
+                            }
                         }
+                        .buttonStyle(.plain)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 16)
                     }
@@ -498,6 +506,56 @@ struct ContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
             if openBookProgress == 0 {
                 openBookIndex = nil
+            }
+        }
+    }
+
+    private func addNewAlbum() {
+        guard !isAddingBook else { return }
+        isAddingBook = true
+
+        let colors: [(cover: String, spine: String, edge: String)] = [
+            ("6B8E9B", "5A7C89", "B8BDC0"),
+            ("C4604A", "984535", "B74530"),
+            ("A59E7A", "C4A820", "C4A820"),
+            ("7A6B8A", "685A78", "A8A0B0"),
+            ("8A7A5A", "786848", "C0B890"),
+        ]
+        let pick = colors[Int.random(in: 0..<colors.count)]
+
+        let newBook = Notebook(
+            title: "Untitled",
+            pages: [Page(text: "")],
+            coverColor: Color(hex: pick.cover),
+            spineColor: Color(hex: pick.spine),
+            pageEdgeColor: Color(hex: pick.edge),
+            hasCoverArt: false,
+            textureURL: "",
+            creationDate: Date()
+        )
+
+        // Start the new book off-screen (drop = 0)
+        newBookDrop = 0
+        notebooks.append(newBook)
+
+        // Phase 1: Scroll carousel to the new book
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.88)) {
+            selectedIndex = notebooks.count - 1
+            dragOffset = 0
+        }
+
+        // Phase 2: Rise from below with a bouncy landing
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) {
+                newBookDrop = 1
+            }
+
+            // Haptic on landing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                #if canImport(UIKit)
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                #endif
+                isAddingBook = false
             }
         }
     }
@@ -653,6 +711,7 @@ struct BookCarousel: View {
     let bookJump: CGFloat
     let bookTurn: CGFloat
     let onBookTap: (Int) -> Void
+    var newBookDrop: CGFloat = 1
 
     private var isIPad: Bool { screenWidth > 500 }
     private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 : screenWidth * 0.58 }
@@ -799,7 +858,8 @@ struct BookCarousel: View {
                         turn: isOpeningThis ? bookTurn : 0,
                         distanceFromCenter: dist,
                         shadowOpacity: shadowOp,
-                        scrollVelocity: dragVelocity
+                        scrollVelocity: dragVelocity,
+                        dropProgress: index == notebooks.count - 1 ? newBookDrop : 1
                     )
                     .scaleEffect(itemScale, anchor: .bottom)
                     .rotation3DEffect(
@@ -1002,6 +1062,17 @@ struct BookItem: View {
     var distanceFromCenter: CGFloat = 0
     var shadowOpacity: Double = 0.15
     var scrollVelocity: CGFloat = 0
+    var dropProgress: CGFloat = 1
+
+    /// Drop offset: starts 500pt below, rises to 0
+    private var dropOffset: CGFloat {
+        (1 - dropProgress) * 500
+    }
+
+    /// Slight tilt during fall
+    private var dropTilt: Double {
+        dropProgress < 1 ? Double(1 - dropProgress) * 8 : 0
+    }
 
     /// The angle the front cover rotates open (0 = closed, ~160 = fully open)
     private var coverOpenAngle: Double {
@@ -1140,9 +1211,17 @@ struct BookItem: View {
         .offset(x: centeringOffset)
         // Jump offset (for open animation)
         .offset(y: jump * -40)
+        // Drop from above animation
+        .offset(y: dropOffset)
+        .rotation3DEffect(
+            .degrees(dropTilt),
+            axis: (x: 0, y: 0, z: 1)
+        )
+        .opacity(dropProgress < 0.01 ? 0 : 1)
         .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openProgress)
         .animation(.spring(response: 0.35, dampingFraction: 0.5), value: jump)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: turn)
+        .animation(.spring(response: 0.5, dampingFraction: 0.45), value: dropProgress)
     }
 }
 
