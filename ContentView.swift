@@ -62,7 +62,7 @@ struct ContentView: View {
     @State private var newBookTitle: String = ""
     @State private var cursorVisible: Bool = false
     @State private var cursorTimer: Timer? = nil
-    @State private var initialAppear: [CGFloat] = []
+    @State private var entranceSlide: CGFloat = 600
     @State private var hasAppeared: Bool = false
     @FocusState private var isTitleFieldFocused: Bool
 
@@ -337,24 +337,16 @@ struct ContentView: View {
                         },
                         newBookDrop: newBookDrop,
                         droppingBookIndex: droppingBookIndex,
-                        initialAppear: initialAppear
+                        entranceSlide: entranceSlide
                     )
                     .frame(height: isIPad ? 575 : 450)
                     .onAppear {
                         if !hasAppeared {
                             hasAppeared = true
-                            initialAppear = Array(repeating: 0, count: notebooks.count)
-                            // Stagger books appearing from right to left
-                            for i in (0..<notebooks.count).reversed() {
-                                let delay = 0.15 + Double(notebooks.count - 1 - i) * 0.12
-                                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                                    withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
-                                        initialAppear[i] = 1
-                                    }
-                                }
+                            withAnimation(.easeOut(duration: 0.6)) {
+                                entranceSlide = 0
                             }
-                            // Pre-warm keyboard during entrance animation
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                                 isTitleFieldFocused = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     isTitleFieldFocused = false
@@ -811,7 +803,7 @@ struct BookCarousel: View {
     let onBookTap: (Int) -> Void
     var newBookDrop: CGFloat = 1
     var droppingBookIndex: Int? = nil
-    var initialAppear: [CGFloat] = []
+    var entranceSlide: CGFloat = 0
 
     private var isIPad: Bool { screenWidth > 500 }
     private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 : screenWidth * 0.58 }
@@ -959,8 +951,7 @@ struct BookCarousel: View {
                         distanceFromCenter: dist,
                         shadowOpacity: shadowOp,
                         scrollVelocity: dragVelocity,
-                        dropProgress: index == droppingBookIndex ? newBookDrop : (index < initialAppear.count ? initialAppear[index] : 1),
-                        slideFromRight: index != droppingBookIndex
+                        dropProgress: index == droppingBookIndex ? newBookDrop : 1
                     )
                     .scaleEffect(itemScale, anchor: .bottom)
                     .rotation3DEffect(
@@ -977,10 +968,11 @@ struct BookCarousel: View {
             }
             .padding(.bottom, shelfTotal)
             .frame(height: geometry.size.height, alignment: .bottom)
-            .offset(x: baseOffset)
+            .offset(x: baseOffset + entranceSlide)
             .animation(.spring(response: 0.45, dampingFraction: 0.92), value: selectedIndex)
             .animation(.interpolatingSpring(stiffness: 300, damping: 30), value: dragOffset)
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
+            .animation(.easeOut(duration: 0.6), value: entranceSlide)
             .gesture(
                 DragGesture(minimumDistance: 5)
                     .onChanged { value in
@@ -1164,7 +1156,6 @@ struct BookItem: View {
     var shadowOpacity: Double = 0.15
     var scrollVelocity: CGFloat = 0
     var dropProgress: CGFloat = 1
-    var slideFromRight: Bool = false
 
     /// Drop offset: starts 500pt below, rises to 0
     private var dropOffset: CGFloat {
@@ -1313,10 +1304,10 @@ struct BookItem: View {
         .offset(x: centeringOffset)
         // Jump offset (for open animation)
         .offset(y: jump * -40)
-        // Entrance animation: slide from right or drop from above
-        .offset(x: slideFromRight ? dropOffset : 0, y: slideFromRight ? 0 : dropOffset)
+        // Drop from above animation (new book add)
+        .offset(y: dropOffset)
         .rotation3DEffect(
-            .degrees(slideFromRight ? 0 : dropTilt),
+            .degrees(dropTilt),
             axis: (x: 0, y: 0, z: 1)
         )
         .opacity(dropProgress < 0.01 ? 0 : 1)
