@@ -995,10 +995,10 @@ struct BookItem: View {
         .background(alignment: .leading) {
             if !isOpening && openProgress == 0 {
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(isSelected ? 0.30 : 0.06))
-                    .frame(width: bookWidth * (isSelected ? 0.28 : 0.10), height: bookHeight * (isSelected ? 0.88 : 0.50))
-                    .blur(radius: isSelected ? 22 : 7)
-                    .offset(x: -bookWidth * (isSelected ? 0.24 : 0.06), y: bookHeight * 0.03)
+                    .fill(Color.black.opacity(isSelected ? 0.30 : 0.20))
+                    .frame(width: bookWidth * (isSelected ? 0.28 : 0.16), height: bookHeight * (isSelected ? 0.88 : 0.70))
+                    .blur(radius: isSelected ? 22 : 14)
+                    .offset(x: -bookWidth * (isSelected ? 0.24 : 0.12), y: bookHeight * 0.03)
             }
         }
         // Diagonal shade from book's bottom-left corner up-left to vertical shade
@@ -1008,22 +1008,22 @@ struct BookItem: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.black.opacity(isSelected ? 0.26 : 0.08),
-                                Color.black.opacity(isSelected ? 0.10 : 0.03),
+                                Color.black.opacity(isSelected ? 0.12 : 0.08),
+                                Color.black.opacity(isSelected ? 0.05 : 0.03),
                                 Color.clear
                             ],
                             startPoint: .bottomTrailing,
                             endPoint: .topLeading
                         )
                     )
-                    .frame(width: bookWidth * (isSelected ? 0.24 : 0.10), height: bookHeight * (isSelected ? 0.28 : 0.16))
-                    .blur(radius: isSelected ? 8 : 4)
-                    .offset(x: -bookWidth * (isSelected ? 0.24 : 0.10))
+                    .frame(width: bookWidth * (isSelected ? 0.24 : 0.14), height: bookHeight * (isSelected ? 0.28 : 0.20))
+                    .blur(radius: isSelected ? 8 : 5)
+                    .offset(x: -bookWidth * (isSelected ? 0.24 : 0.14))
             }
         }
         // Sun from the right — shadow casts to the left
-        .shadow(color: Color.black.opacity(isSelected ? 0.22 : 0.05), radius: isSelected ? 24 : 6, x: isSelected ? -20 : -5, y: isSelected ? 14 : 3)
-        .shadow(color: Color.black.opacity(isSelected ? 0.12 : 0.02), radius: isSelected ? 8 : 2, x: isSelected ? -8 : -2, y: isSelected ? 5 : 1)
+        .shadow(color: Color.black.opacity(isSelected ? 0.22 : 0.12), radius: isSelected ? 24 : 10, x: isSelected ? -20 : -8, y: isSelected ? 14 : 5)
+        .shadow(color: Color.black.opacity(isSelected ? 0.12 : 0.06), radius: isSelected ? 8 : 3, x: isSelected ? -8 : -3, y: isSelected ? 5 : 2)
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         // Turn the whole book
