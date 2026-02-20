@@ -62,7 +62,7 @@ struct ContentView: View {
     @State private var newBookTitle: String = ""
     @State private var cursorVisible: Bool = false
     @State private var cursorTimer: Timer? = nil
-    @State private var entranceSlide: CGFloat = 600
+    @State private var entranceSlide: CGFloat = 1500
     @State private var hasAppeared: Bool = false
     @FocusState private var isTitleFieldFocused: Bool
 
@@ -343,13 +343,11 @@ struct ContentView: View {
                     .onAppear {
                         if !hasAppeared {
                             hasAppeared = true
-                            withAnimation(.easeOut(duration: 0.6)) {
-                                entranceSlide = 0
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                isTitleFieldFocused = true
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                    isTitleFieldFocused = false
+                            // Snap to just past screen edge (invisible, keeps books in render tree)
+                            entranceSlide = geometry.size.width
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                withAnimation(.easeOut(duration: 0.5)) {
+                                    entranceSlide = 0
                                 }
                             }
                         }
@@ -972,7 +970,6 @@ struct BookCarousel: View {
             .animation(.spring(response: 0.45, dampingFraction: 0.92), value: selectedIndex)
             .animation(.interpolatingSpring(stiffness: 300, damping: 30), value: dragOffset)
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
-            .animation(.easeOut(duration: 0.6), value: entranceSlide)
             .gesture(
                 DragGesture(minimumDistance: 5)
                     .onChanged { value in
@@ -1043,9 +1040,11 @@ struct BookCarousel: View {
             )
         }
         .onAppear {
-            // Micro-float breathing loop
-            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
-                floatPhase = .pi * 2
+            // Delay micro-float so it doesn't compete with entrance animation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                    floatPhase = .pi * 2
+                }
             }
         }
     }
