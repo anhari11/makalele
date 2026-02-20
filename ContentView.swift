@@ -487,6 +487,21 @@ struct CircleButton<Content: View>: View {
     }
 }
 
+// MARK: - Diagonal Shadow Shape
+
+struct DiagonalShadowShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        // Wedge from bottom-right (book corner) going diagonally up-left to vertical shade
+        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY))           // bottom-right (book corner)
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY * 0.7))  // slightly above on right edge
+        path.addLine(to: CGPoint(x: 0, y: 0))                        // top-left (meets vertical shade)
+        path.addLine(to: CGPoint(x: 0, y: rect.maxY * 0.4))          // lower-left
+        path.closeSubpath()
+        return path
+    }
+}
+
 // MARK: - Book Floor Shadow Shape
 
 enum FloorShadowSide { case left, right }
@@ -976,15 +991,34 @@ struct BookItem: View {
                 )
         }
         .frame(width: bookWidth, height: bookHeight)
-        // Wide soft glow shadow
+        // Vertical shade along the left edge
         .background(alignment: .leading) {
             if !isOpening && openProgress == 0 {
-                // Soft wide shadow glow at the left of the book
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.black.opacity(isSelected ? 0.30 : 0.06))
                     .frame(width: bookWidth * (isSelected ? 0.28 : 0.10), height: bookHeight * (isSelected ? 0.88 : 0.50))
                     .blur(radius: isSelected ? 22 : 7)
                     .offset(x: -bookWidth * (isSelected ? 0.24 : 0.06), y: bookHeight * 0.03)
+            }
+        }
+        // Diagonal shade from book's bottom-left corner up-left to vertical shade
+        .background(alignment: .bottomLeading) {
+            if !isOpening && openProgress == 0 {
+                DiagonalShadowShape()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(isSelected ? 0.26 : 0.08),
+                                Color.black.opacity(isSelected ? 0.10 : 0.03),
+                                Color.clear
+                            ],
+                            startPoint: .bottomTrailing,
+                            endPoint: .topLeading
+                        )
+                    )
+                    .frame(width: bookWidth * (isSelected ? 0.24 : 0.10), height: bookHeight * (isSelected ? 0.28 : 0.16))
+                    .blur(radius: isSelected ? 8 : 4)
+                    .offset(x: -bookWidth * (isSelected ? 0.24 : 0.10))
             }
         }
         // Sun from the right — shadow casts to the left
