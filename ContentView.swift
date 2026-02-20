@@ -125,23 +125,32 @@ struct ContentView: View {
                         //.padding(.horizontal, 20)
                         //.background(uiBgColor)
 
-                        Spacer()
+                        HStack(spacing: 3) {
+                            Image("profile")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 19, height: 19)
+                                .clipShape(Circle())
+                                .opacity(1 - Double(openBookProgress) * 0.5)
 
-                        Image("profile")
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 34, height: 34)
-                            .clipShape(Circle())
-                            .opacity(1 - Double(openBookProgress) * 0.5)
-                            .overlay(
-                                Circle()
-                                    .stroke(uiBgColor, lineWidth: 2)
-                                    .frame(width: 40, height: 40)
-                            )
+                            Text("aanhari")
+                                .foregroundStyle(Color.black)
+                                .fontWeight(.bold)
+                            
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(Color(hex: "#898988"))
+                                .fontWeight(.bold)
+                        }
+
+                        Spacer()
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
+                    
+                    Spacer()
 
                     Spacer(minLength: 0)
                         .frame(maxHeight: 16)
@@ -1032,8 +1041,8 @@ struct BookItem: View {
             }
         }
         // Sun from the right — shadow casts to the left
-        .shadow(color: Color.black.opacity(shadeLerp(0.22, 0.12)), radius: shadeLerp(18, 10), x: shadeLerp(-15, -8), y: shadeLerp(18, 10))
-        .shadow(color: Color.black.opacity(shadeLerp(0.12, 0.06)), radius: shadeLerp(6, 3), x: shadeLerp(-6, -3), y: shadeLerp(6, 3))
+        .shadow(color: Color.black.opacity(shadeLerp(0.12, 0.08)), radius: shadeLerp(10, 6), x: shadeLerp(-10, -5), y: shadeLerp(8, 5))
+        .shadow(color: Color.black.opacity(shadeLerp(0.06, 0.03)), radius: shadeLerp(3, 2), x: shadeLerp(-3, -2), y: shadeLerp(3, 2))
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         // Turn the whole book
