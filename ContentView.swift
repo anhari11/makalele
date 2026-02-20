@@ -56,7 +56,15 @@ struct ContentView: View {
     @State private var flipProgress: CGFloat = 0
     @State private var showFullBook: Bool = false
     @State private var newBookDrop: CGFloat = 1
+    @State private var droppingBookIndex: Int? = nil
     @State private var isAddingBook: Bool = false
+    @State private var isNamingNewBook: Bool = false
+    @State private var newBookTitle: String = ""
+    @State private var cursorVisible: Bool = false
+    @State private var cursorTimer: Timer? = nil
+    @State private var initialDrop: CGFloat = 0
+    @State private var hasAppeared: Bool = false
+    @FocusState private var isTitleFieldFocused: Bool
 
     private func formattedCreationDate(for date: Date) -> String {
         let formatter = DateFormatter()
@@ -155,14 +163,41 @@ struct ContentView: View {
                     ZStack {
                         // Centered: title + ellipsis
                         HStack(spacing: 4) {
-                            Button(action: {}) {
-                                Text(notebooks[selectedIndex].title)
+                            ZStack {
+                                // Always-present TextField (avoids first-keyboard lag)
+                                TextField("", text: $newBookTitle)
                                     .font(.system(size: 17, weight: .bold))
                                     .foregroundColor(.black)
+                                    .multilineTextAlignment(.center)
+                                    .tint(.clear)
+                                    .focused($isTitleFieldFocused)
+                                    .onSubmit { finishNaming() }
+                                    .opacity(isNamingNewBook ? 1 : 0)
+                                    .allowsHitTesting(isNamingNewBook)
+
+                                if isNamingNewBook && newBookTitle.isEmpty {
+                                    HStack(spacing: 0) {
+                                        Text("Untitled")
+                                            .font(.system(size: 17, weight: .bold))
+                                            .foregroundColor(.gray.opacity(0.5))
+                                        Rectangle()
+                                            .fill(Color.black)
+                                            .frame(width: 2, height: 20)
+                                            .opacity(cursorVisible ? 1 : 0)
+                                    }
+                                    .allowsHitTesting(false)
+                                }
+
+                                if !isNamingNewBook {
+                                    Text(notebooks[selectedIndex].title)
+                                        .font(.system(size: 17, weight: .bold))
+                                        .foregroundColor(.black)
+                                }
                             }
                             .padding(.vertical, 6)
                             .padding(.horizontal, 14)
                             .background(Color(hex: "EFEFEF"))
+                            .fixedSize()
                             Button(action: {}) {
                                 HStack(spacing: 6) {   // 👈 control spacing here
                                     Circle()
@@ -299,9 +334,28 @@ struct ContentView: View {
                         onBookTap: { index in
                             handleBookTap(index: index)
                         },
-                        newBookDrop: newBookDrop
+                        newBookDrop: newBookDrop,
+                        droppingBookIndex: droppingBookIndex,
+                        initialDrop: initialDrop
                     )
                     .frame(height: isIPad ? 575 : 450)
+                    .onAppear {
+                        if !hasAppeared {
+                            hasAppeared = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                withAnimation(.spring(response: 0.5, dampingFraction: 0.45)) {
+                                    initialDrop = 1
+                                }
+                            }
+                            // Pre-warm keyboard during entrance animation
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                isTitleFieldFocused = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    isTitleFieldFocused = false
+                                }
+                            }
+                        }
+                    }
 
                     // Title and ellipsis row (moved to shelf overlay)
 
@@ -413,6 +467,7 @@ struct ContentView: View {
 
             }
         }
+        .ignoresSafeArea(.keyboard)
     }
 
     private func handleBookTap(index: Int) {
@@ -534,30 +589,67 @@ struct ContentView: View {
             creationDate: Date()
         )
 
-        // Start the new book off-screen (drop = 0)
-        newBookDrop = 0
         notebooks.append(newBook)
+        let newIndex = notebooks.count - 1
+        droppingBookIndex = newIndex
+        newBookDrop = 0
+        newBookTitle = ""
 
-        // Phase 1: Scroll carousel to the new book
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.88)) {
-            selectedIndex = notebooks.count - 1
+        // Phase 1: Scroll to new book
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) {
+            selectedIndex = newIndex
             dragOffset = 0
         }
 
-        // Phase 2: Rise from below with a bouncy landing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) {
+        // Phase 2: Rise from below
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 newBookDrop = 1
             }
-
-            // Haptic on landing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 #if canImport(UIKit)
                 UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
                 #endif
-                isAddingBook = false
+                droppingBookIndex = nil
             }
         }
+
+        // Phase 3: Show keyboard after bounce fully settles
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+            isAddingBook = false
+            isNamingNewBook = true
+            isTitleFieldFocused = true
+            cursorVisible = true
+            cursorTimer?.invalidate()
+            cursorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+                DispatchQueue.main.async {
+                    cursorVisible.toggle()
+                }
+            }
+        }
+    }
+
+    private func finishNaming() {
+        let title = newBookTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty {
+            notebooks[selectedIndex] = Notebook(
+                title: title,
+                pages: notebooks[selectedIndex].pages,
+                coverColor: notebooks[selectedIndex].coverColor,
+                spineColor: notebooks[selectedIndex].spineColor,
+                pageEdgeColor: notebooks[selectedIndex].pageEdgeColor,
+                hasCoverArt: notebooks[selectedIndex].hasCoverArt,
+                textureURL: notebooks[selectedIndex].textureURL,
+                creationDate: notebooks[selectedIndex].creationDate
+            )
+        }
+        cursorTimer?.invalidate()
+        cursorTimer = nil
+        cursorVisible = false
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isNamingNewBook = false
+        }
+        isTitleFieldFocused = false
     }
 }
 
@@ -712,6 +804,8 @@ struct BookCarousel: View {
     let bookTurn: CGFloat
     let onBookTap: (Int) -> Void
     var newBookDrop: CGFloat = 1
+    var droppingBookIndex: Int? = nil
+    var initialDrop: CGFloat = 1
 
     private var isIPad: Bool { screenWidth > 500 }
     private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 : screenWidth * 0.58 }
@@ -859,7 +953,7 @@ struct BookCarousel: View {
                         distanceFromCenter: dist,
                         shadowOpacity: shadowOp,
                         scrollVelocity: dragVelocity,
-                        dropProgress: index == notebooks.count - 1 ? newBookDrop : 1
+                        dropProgress: index == droppingBookIndex ? newBookDrop : initialDrop
                     )
                     .scaleEffect(itemScale, anchor: .bottom)
                     .rotation3DEffect(
@@ -1066,7 +1160,7 @@ struct BookItem: View {
 
     /// Drop offset: starts 500pt below, rises to 0
     private var dropOffset: CGFloat {
-        (1 - dropProgress) * 500
+        (1 - dropProgress) * 300
     }
 
     /// Slight tilt during fall
@@ -1221,7 +1315,6 @@ struct BookItem: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openProgress)
         .animation(.spring(response: 0.35, dampingFraction: 0.5), value: jump)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: turn)
-        .animation(.spring(response: 0.5, dampingFraction: 0.45), value: dropProgress)
     }
 }
 
