@@ -7,6 +7,31 @@
 
 import SwiftUI
 
+// MARK: - Keyboard Pre-warm
+
+#if canImport(UIKit)
+/// Loads the keyboard infrastructure at app start so the first focus doesn't stutter.
+enum KeyboardWarmer {
+    static private var done = false
+    static func warm() {
+        guard !done else { return }
+        done = true
+        // A zero-frame, invisible text field that briefly becomes first responder
+        // with inputView set to an empty view — this loads the keyboard stack
+        // internally without actually presenting the keyboard on screen.
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+        let tf = UITextField(frame: .zero)
+        tf.inputView = UIView()   // suppresses visible keyboard
+        tf.alpha = 0
+        window.addSubview(tf)
+        tf.becomeFirstResponder()
+        tf.resignFirstResponder()
+        tf.removeFromSuperview()
+    }
+}
+#endif
+
 // MARK: - Models
 
 struct Page: Identifiable {
@@ -343,6 +368,10 @@ struct ContentView: View {
                     .onAppear {
                         if !hasAppeared {
                             hasAppeared = true
+                            // Pre-warm keyboard immediately (uses empty inputView so nothing visible)
+                            #if canImport(UIKit)
+                            KeyboardWarmer.warm()
+                            #endif
                             // Snap to just past screen edge (invisible, keeps books in render tree)
                             entranceSlide = geometry.size.width
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
