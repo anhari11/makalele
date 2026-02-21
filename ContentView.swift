@@ -6,28 +6,24 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
-// MARK: - Keyboard Pre-warm
+// MARK: - Haptics
 
 #if canImport(UIKit)
-/// Loads the keyboard infrastructure at app start so the first focus doesn't stutter.
-enum KeyboardWarmer {
-    static private var done = false
-    static func warm() {
-        guard !done else { return }
-        done = true
-        // A zero-frame, invisible text field that briefly becomes first responder
-        // with inputView set to an empty view — this loads the keyboard stack
-        // internally without actually presenting the keyboard on screen.
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else { return }
-        let tf = UITextField(frame: .zero)
-        tf.inputView = UIView()   // suppresses visible keyboard
-        tf.alpha = 0
-        window.addSubview(tf)
-        tf.becomeFirstResponder()
-        tf.resignFirstResponder()
-        tf.removeFromSuperview()
+/// Shared haptic generators — created once, prepared early so the first
+/// impactOccurred() doesn't hitch the Taptic Engine init.
+enum Haptics {
+    static let medium = UIImpactFeedbackGenerator(style: .medium)
+    static let heavy  = UIImpactFeedbackGenerator(style: .heavy)
+
+    /// Call once after launch animations settle (~0.7 s).
+    /// .prepare() is lightweight (~10 ms) — just wakes the Taptic Engine.
+    static func prepareAll() {
+        medium.prepare()
+        heavy.prepare()
     }
 }
 #endif
@@ -368,16 +364,18 @@ struct ContentView: View {
                     .onAppear {
                         if !hasAppeared {
                             hasAppeared = true
-                            // Pre-warm keyboard immediately (uses empty inputView so nothing visible)
-                            #if canImport(UIKit)
-                            KeyboardWarmer.warm()
-                            #endif
                             // Snap to just past screen edge (invisible, keeps books in render tree)
                             entranceSlide = geometry.size.width
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                 withAnimation(.easeOut(duration: 0.5)) {
                                     entranceSlide = 0
                                 }
+                            }
+                            // Prepare haptic engines after entrance settles
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                #if canImport(UIKit)
+                                Haptics.prepareAll()
+                                #endif
                             }
                         }
                     }
@@ -633,17 +631,16 @@ struct ContentView: View {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 #if canImport(UIKit)
-                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                Haptics.heavy.impactOccurred()
                 #endif
                 droppingBookIndex = nil
             }
         }
 
-        // Phase 3: Show keyboard after bounce fully settles
+        // Phase 3: Show naming UI after bounce settles
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
             isAddingBook = false
             isNamingNewBook = true
-            isTitleFieldFocused = true
             cursorVisible = true
             cursorTimer?.invalidate()
             cursorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
@@ -651,6 +648,13 @@ struct ContentView: View {
                     cursorVisible.toggle()
                 }
             }
+        }
+
+        // Phase 4: Focus TextField slightly after UI update commits —
+        // keyboard loads on a static screen so any first-time lag
+        // just looks like the keyboard taking a moment to slide up.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            isTitleFieldFocused = true
         }
     }
 
@@ -1056,7 +1060,7 @@ struct BookCarousel: View {
 
                         if newIndex != oldIndex {
                             #if canImport(UIKit)
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            Haptics.medium.impactOccurred()
                             #endif
                         }
 
