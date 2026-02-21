@@ -28,6 +28,35 @@ enum Haptics {
 }
 #endif
 
+// MARK: - Keyboard Pre-warmer
+
+#if canImport(UIKit)
+/// Invisible UITextField with empty inputView (no keyboard shown).
+/// Briefly becomes first responder after a delay to warm the text input
+/// hosting layer, so the real TextField's first focus is instant.
+struct TextInputWarmer: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView(frame: .zero)
+        container.isUserInteractionEnabled = false
+        let tf = UITextField(frame: .zero)
+        tf.inputView = UIView()          // empty → no visible keyboard
+        tf.autocorrectionType = .no
+        tf.alpha = 0
+        container.addSubview(tf)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            tf.becomeFirstResponder()
+            DispatchQueue.main.async {
+                tf.resignFirstResponder()
+            }
+        }
+        return container
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
+#endif
+
 // MARK: - Models
 
 struct Page: Identifiable {
@@ -484,6 +513,9 @@ struct ContentView: View {
             }
         }
         .ignoresSafeArea(.keyboard)
+        #if canImport(UIKit)
+        .background(TextInputWarmer().frame(width: 0, height: 0))
+        #endif
     }
 
     private func handleBookTap(index: Int) {
@@ -630,17 +662,21 @@ struct ContentView: View {
             }
         }
 
-        // Phase 3: Show keyboard after bounce fully settles
+        // Phase 3: Show naming UI after bounce settles, then focus
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
             isAddingBook = false
             isNamingNewBook = true
-            isTitleFieldFocused = true
             cursorVisible = true
             cursorTimer?.invalidate()
             cursorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
                 DispatchQueue.main.async {
                     cursorVisible.toggle()
                 }
+            }
+            // Focus on next render pass — naming UI (cursor + placeholder)
+            // appears instantly, keyboard follows right after.
+            DispatchQueue.main.async {
+                self.isTitleFieldFocused = true
             }
         }
     }
