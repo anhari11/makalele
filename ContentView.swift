@@ -153,6 +153,11 @@ struct ContentView: View {
             ZStack {
                 Color.white
                     .ignoresSafeArea()
+                    .onTapGesture {
+                        if isNamingNewBook {
+                            finishNaming()
+                        }
+                    }
 
                 // Background overlay: book color when opening
                 if let openIndex = openBookIndex {
@@ -265,9 +270,11 @@ struct ContentView: View {
                             .background(Color(hex: "EFEFEF"))
                            
                         }
+                        .scaleEffect(isNamingNewBook ? 1.25 : 1.0)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isNamingNewBook)
                         .offset(x: dragOffset)
 
-                   
+
                         if isIPad {
                             HStack {
                                 Spacer()
@@ -480,6 +487,8 @@ struct ContentView: View {
                         .padding(.bottom, 16)
                     }
                 }
+                .scaleEffect(isNamingNewBook ? 1.15 : 1.0, anchor: UnitPoint(x: 0.5, y: 0.13))
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isNamingNewBook)
                 .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                 .allowsHitTesting(openBookIndex == nil)
                 
