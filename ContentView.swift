@@ -242,7 +242,7 @@ struct ContentView: View {
                         }
                         .offset(x: dragOffset)
 
-                        // Right-aligned: Make a new album (iPad only)
+                   
                         if isIPad {
                             HStack {
                                 Spacer()
