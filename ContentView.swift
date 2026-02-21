@@ -249,18 +249,18 @@ struct ContentView: View {
                             .background(Color(hex: "EFEFEF"))
                             .fixedSize()
                             Button(action: {}) {
-                                HStack(spacing: 6) {   // 👈 control spacing here
-                                    Circle()
-                                        .frame(width: 5, height: 5)
-                                    Circle()
-                                        .frame(width: 5, height: 5)
-                                    Circle()
-                                        .frame(width: 5, height: 5)
+                                HStack(spacing: 6) {   // 👈 control
+                                    Rectangle()
+                                        .frame(width: 6.5, height: 6.5)
+                                           Rectangle()
+                                        .frame(width: 6.5, height: 6.5)
+                                           Rectangle()
+                                        .frame(width: 6.5, height: 6.5)
                                 }
                                 .foregroundStyle(.black)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 13.5
+                            .padding(.horizontal, 19)
+                            .padding(.vertical, 13.8
                             )
                             .background(Color(hex: "EFEFEF"))
                            
@@ -885,11 +885,12 @@ struct BookCarousel: View {
         CGFloat(index - selectedIndex) + dragOffset / totalBookWidth
     }
 
-    /// Smooth interpolation: scale from distance — drops off quickly so side books are small
+    /// Smooth interpolation: scale from distance — reaches non-selected size at dist 1, stays there
     private func scaleForDistance(_ dist: CGFloat) -> CGFloat {
-        let t = min(abs(dist), 2.0) / 2.0
-        let curved = t * t // quadratic falloff for sharper drop
-        return maxScale - (maxScale - minScale) * curved
+        let t = min(abs(dist), 1.0)
+        let nonSelectedScale: CGFloat = 0.75
+        let curved = t * t // quadratic: stays big near center, drops to non-selected
+        return maxScale - (maxScale - nonSelectedScale) * curved
     }
 
     /// Y-axis rotation from distance — all books face straight forward
@@ -1292,15 +1293,11 @@ struct BookItem: View {
                 .overlay(alignment: .topTrailing) {
                     if isSelected && !isOpening {
                         Button(action: {}) {
-                            HStack(spacing: 5) {
-                                ForEach(0..<3, id: \.self) { _ in
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 5, height: 5)
-                                }
-                            }
+                            Image(systemName: "square.and.pencil")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
                         }
-                        .frame(width: 81, height: 32)
+                        .frame(width: 32, height: 32)
                         .background(Color.black.opacity(0.20))
                         .cornerRadius(0)
                         .padding(.trailing, 8)
