@@ -364,18 +364,11 @@ struct ContentView: View {
                     .onAppear {
                         if !hasAppeared {
                             hasAppeared = true
-                            // Snap to just past screen edge (invisible, keeps books in render tree)
                             entranceSlide = geometry.size.width
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                 withAnimation(.easeOut(duration: 0.5)) {
                                     entranceSlide = 0
                                 }
-                            }
-                            // Prepare haptic engines after entrance settles
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                                #if canImport(UIKit)
-                                Haptics.prepareAll()
-                                #endif
                             }
                         }
                     }
@@ -637,10 +630,11 @@ struct ContentView: View {
             }
         }
 
-        // Phase 3: Show naming UI after bounce settles
+        // Phase 3: Show keyboard after bounce fully settles
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
             isAddingBook = false
             isNamingNewBook = true
+            isTitleFieldFocused = true
             cursorVisible = true
             cursorTimer?.invalidate()
             cursorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
@@ -648,13 +642,6 @@ struct ContentView: View {
                     cursorVisible.toggle()
                 }
             }
-        }
-
-        // Phase 4: Focus TextField slightly after UI update commits —
-        // keyboard loads on a static screen so any first-time lag
-        // just looks like the keyboard taking a moment to slide up.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-            isTitleFieldFocused = true
         }
     }
 
