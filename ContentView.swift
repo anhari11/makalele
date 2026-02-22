@@ -303,7 +303,7 @@ struct ContentView: View {
 
                     // Aanhari x and Share with friends
                     Group {
-                        if min(geometry.size.width, geometry.size.height) > 500 {
+                        if isIPad {
                             HStack {
                                 Button(action: {}) {
                                     HStack(spacing: 2) {
@@ -811,7 +811,7 @@ struct BookCarousel: View {
     private var isIPad: Bool { screenWidth > 500 }
     private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 : screenWidth * 0.58 }
     private var bookHeight: CGFloat { isIPad ? 456 : 342 }
-    private var bookSpacing: CGFloat { isIPad ? 40 : 20 }
+    private var bookSpacing: CGFloat { 20 }
 
     @State private var isDragging: Bool = false
     @State private var dragVelocity: CGFloat = 0
@@ -1273,15 +1273,16 @@ struct BookItem: View {
                 .overlay(alignment: .topTrailing) {
                     if isSelected && !isOpening {
                         Button(action: {}) {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 14, weight: .medium))
+                            Text("Edit")
+                                .font(.system(size: 20, weight: .bold))
                                 .foregroundColor(.white)
                         }
-                        .frame(width: 32, height: 32)
+                        .padding(.horizontal, 17)
+                        .padding(.vertical, 7)
                         .background(Color.black.opacity(0.20))
-                        .cornerRadius(0)
-                        .padding(.trailing, 8)
-                        .padding(.top, 10)
+                        .cornerRadius(100)
+                        .padding(.trailing, 13)
+                        .padding(.top, 13)
                     }
                 }
                 // Cover flips open from the spine (left edge)
