@@ -104,6 +104,7 @@ struct ContentView: View {
     @State private var bookTurn: CGFloat = 0
     @State private var currentPage: Int = 0
     @State private var flipProgress: CGFloat = 0
+    @State private var pageDragOffset: CGFloat = 0
     @State private var newBookDrop: CGFloat = 1
     @State private var droppingBookIndex: Int? = nil
     @State private var isAddingBook: Bool = false
@@ -389,6 +390,7 @@ struct ContentView: View {
                             handleBookTap(index: index)
                         },
                         currentPage: $currentPage,
+                        pageDragOffset: pageDragOffset,
                         newBookDrop: newBookDrop,
                         droppingBookIndex: droppingBookIndex,
                         entranceSlide: entranceSlide
@@ -489,11 +491,39 @@ struct ContentView: View {
                 .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                 .allowsHitTesting(openBookIndex == nil)
 
-                // Tap anywhere to close the open book
-                if openBookIndex != nil {
+                // Tap to close / drag to turn pages
+                if let openIndex = openBookIndex {
                     Color.clear
                         .contentShape(Rectangle())
                         .ignoresSafeArea()
+                        .gesture(
+                            DragGesture(minimumDistance: 20)
+                                .onChanged { value in
+                                    pageDragOffset = value.translation.height
+                                }
+                                .onEnded { value in
+                                    let threshold: CGFloat = 50
+                                    let velocity = value.velocity.height
+                                    if pageDragOffset < -threshold || velocity < -300 {
+                                        // Swipe up → next page
+                                        if currentPage < notebooks[openIndex].pages.count - 1 {
+                                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                                currentPage += 1
+                                            }
+                                        }
+                                    } else if pageDragOffset > threshold || velocity > 300 {
+                                        // Swipe down → previous page
+                                        if currentPage > 0 {
+                                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                                currentPage -= 1
+                                            }
+                                        }
+                                    }
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                                        pageDragOffset = 0
+                                    }
+                                }
+                        )
                         .onTapGesture {
                             closeOpenBook()
                         }
@@ -538,6 +568,7 @@ struct ContentView: View {
     }
 
     private func performCoverCloseAnimation() {
+        pageDragOffset = 0
         withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
             openBookProgress = 0
         }
@@ -792,6 +823,7 @@ struct BookCarousel: View {
     let bookTurn: CGFloat
     let onBookTap: (Int) -> Void
     @Binding var currentPage: Int
+    var pageDragOffset: CGFloat = 0
     var newBookDrop: CGFloat = 1
     var droppingBookIndex: Int? = nil
     var entranceSlide: CGFloat = 0
@@ -943,6 +975,7 @@ struct BookCarousel: View {
                         jump: isOpeningThis ? bookJump : 0,
                         turn: isOpeningThis ? bookTurn : 0,
                         currentPage: $currentPage,
+                        pageDragOffset: isOpeningThis ? pageDragOffset : 0,
                         distanceFromCenter: dist,
                         shadowOpacity: shadowOp,
                         scrollVelocity: dragVelocity,
@@ -1241,12 +1274,11 @@ struct BookItem: View {
     var jump: CGFloat = 0
     var turn: CGFloat = 0
     @Binding var currentPage: Int
+    var pageDragOffset: CGFloat = 0
     var distanceFromCenter: CGFloat = 0
     var shadowOpacity: Double = 0.15
     var scrollVelocity: CGFloat = 0
     var dropProgress: CGFloat = 1
-
-    @State private var pageDragOffset: CGFloat = 0
 
     /// Drop offset: starts 500pt below, rises to 0
     private var dropOffset: CGFloat {
@@ -1363,6 +1395,29 @@ struct BookItem: View {
                         .allowsHitTesting(false)
                     }
 
+                    // Horizontal binding crease shadow
+                    VStack(spacing: 0) {
+                        Spacer()
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.clear,
+                                        Color.black.opacity(0.06),
+                                        Color.black.opacity(0.14),
+                                        Color.black.opacity(0.06),
+                                        Color.clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(height: 28)
+                        Spacer()
+                    }
+                    .padding(.horizontal, pageInset)
+                    .allowsHitTesting(false)
+
                     // Current page with drag tilt effect
                     LinedPageView(
                         pageText: pageText,
@@ -1396,35 +1451,6 @@ struct BookItem: View {
                 )
                 .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
                 .opacity(Double(openProgress))
-                .contentShape(Rectangle())
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 20)
-                        .onChanged { value in
-                            pageDragOffset = value.translation.height
-                        }
-                        .onEnded { value in
-                            let threshold: CGFloat = 50
-                            let velocity = value.velocity.height
-                            if pageDragOffset < -threshold || velocity < -300 {
-                                // Swipe up → next page
-                                if currentPage < notebook.pages.count - 1 {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                                        currentPage += 1
-                                    }
-                                }
-                            } else if pageDragOffset > threshold || velocity > 300 {
-                                // Swipe down → previous page
-                                if currentPage > 0 {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                                        currentPage -= 1
-                                    }
-                                }
-                            }
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                                pageDragOffset = 0
-                            }
-                        }
-                )
             }
 
             // ── The book cover ──
@@ -1445,7 +1471,7 @@ struct BookItem: View {
                         .padding(.top, 13)
                     }
                 }
-                // Cover flips upward from top edge — pages revealed below
+                // Cover flips upward — spine at top (horizontal book)
                 .rotation3DEffect(
                     .degrees(Double(openProgress) * -95),
                     axis: (x: 1, y: 0, z: 0),
@@ -1490,12 +1516,12 @@ struct BookItem: View {
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         .rotationEffect(.degrees(turnAngle))
-        // Concave perspective — looking down at the open book
+        // Convex perspective — page bows toward viewer
         .rotation3DEffect(
-            .degrees(Double(openProgress) * -15),
+            .degrees(Double(openProgress) * 12),
             axis: (x: 1, y: 0, z: 0),
-            anchor: .center,
-            perspective: 0.5
+            anchor: .top,
+            perspective: 0.35
         )
         // Vertical offset
         .offset(y: riseOffset)
