@@ -189,30 +189,30 @@ struct ContentView: View {
                         //.padding(.horizontal, 20)
                         //.background(uiBgColor)
 
-                        HStack(spacing: 3) {
-                            Image("profile")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 19, height: 19)
-                                .clipShape(Circle())
-                                .opacity(1 - Double(openBookProgress) * 0.5)
+                        //HStack(spacing: 3) {
+                          //  Image("profile")
+                            //    .resizable()
+                              //  .scaledToFill()
+                                //.frame(width: 19, height: 19)
+                                //.clipShape(Circle())
+                                //.opacity(1 - Double(openBookProgress) * 0.5)
 
-                            Text("aanhari")
-                                .foregroundStyle(Color.black)
-                                .fontWeight(.bold)
+                            //Text("aanhari")
+                              //  .foregroundStyle(Color.black)
+                                //.fontWeight(.bold)
                             
 
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(Color(hex: "#898988"))
-                                .fontWeight(.bold)
-                        }
+                            //Image(systemName: "chevron.right")
+                              //  .font(.system(size: 15, weight: .medium))
+                                //.foregroundColor(Color(hex: "#898988"))
+                                //.fontWeight(.bold)
+                        //}
 
                         Spacer()
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
-                    .padding(.bottom, 50)
+                    .padding(.bottom, 10)
                     
                     ZStack  {
                         // Centered: title + ellipsis
@@ -388,6 +388,7 @@ struct ContentView: View {
                         onBookTap: { index in
                             handleBookTap(index: index)
                         },
+                        currentPage: $currentPage,
                         newBookDrop: newBookDrop,
                         droppingBookIndex: droppingBookIndex,
                         entranceSlide: entranceSlide
@@ -523,17 +524,11 @@ struct ContentView: View {
         openBookProgress = 0
         bookJump = 0
         bookTurn = 0
+        currentPage = 0
 
-        // Phase 1: Turn to landscape (spine goes to top)
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-            bookTurn = 1
-        }
-
-        // Phase 2: Open cover + scale up + rise (after turn settles)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
-                openBookProgress = 1
-            }
+        // Open cover + scale up
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
+            openBookProgress = 1
         }
     }
 
@@ -543,20 +538,11 @@ struct ContentView: View {
     }
 
     private func performCoverCloseAnimation() {
-        // Phase 1: Close cover + shrink + lower
         withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
             openBookProgress = 0
         }
 
-        // Phase 2: Turn back upright (after cover closes)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                bookTurn = 0
-            }
-        }
-
-        // Phase 3: Cleanup
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if openBookProgress == 0 {
                 openBookIndex = nil
             }
@@ -805,6 +791,7 @@ struct BookCarousel: View {
     let bookJump: CGFloat
     let bookTurn: CGFloat
     let onBookTap: (Int) -> Void
+    @Binding var currentPage: Int
     var newBookDrop: CGFloat = 1
     var droppingBookIndex: Int? = nil
     var entranceSlide: CGFloat = 0
@@ -932,7 +919,7 @@ struct BookCarousel: View {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
                     let isOpeningThis = openBookIndex == index
                     let dist = continuousPosition(index: index, totalBookWidth: totalBookWidth)
-                    let itemScale = isOpeningThis ? (1.0 + openBookProgress * 0.15) : scaleForDistance(dist)
+                    let itemScale = isOpeningThis ? (1.0 + openBookProgress * 0.55) : scaleForDistance(dist)
                     let rotationDeg = isOpeningThis ? 0.0 : rotationForDistance(dist)
                     let shadowOp = shadowOpacityForDistance(dist)
                     // Center the book in the carousel when opening
@@ -955,6 +942,7 @@ struct BookCarousel: View {
                         openProgress: isOpeningThis ? openBookProgress : 0,
                         jump: isOpeningThis ? bookJump : 0,
                         turn: isOpeningThis ? bookTurn : 0,
+                        currentPage: $currentPage,
                         distanceFromCenter: dist,
                         shadowOpacity: shadowOp,
                         scrollVelocity: dragVelocity,
@@ -1148,6 +1136,98 @@ struct Button3D: View {
     }
 }
 
+// MARK: - Lined Page View
+
+struct LinedPageView: View {
+    let pageText: String
+    let pageNumber: Int
+    let totalPages: Int
+    let creationDate: Date
+    let pageWidth: CGFloat
+    let pageHeight: CGFloat
+
+    private let lineSpacing: CGFloat = 28
+    private let topMargin: CGFloat = 56
+
+    private var dateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, d MMMM yyyy"
+        return formatter.string(from: creationDate)
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            // Background
+            Color(hex: "F4F2EC")
+
+            // Ruled lines
+            Canvas { context, size in
+                var y = topMargin
+                while y < size.height - 20 {
+                    context.stroke(
+                        Path { p in
+                            p.move(to: CGPoint(x: 24, y: y))
+                            p.addLine(to: CGPoint(x: size.width - 24, y: y))
+                        },
+                        with: .color(Color(hex: "C8C4BC").opacity(0.55)),
+                        lineWidth: 0.5
+                    )
+                    y += lineSpacing
+                }
+            }
+
+            // Date header
+            VStack(alignment: .leading, spacing: 4) {
+                Text(dateString)
+                    .font(.system(size: 16, weight: .bold, design: .serif))
+                    .foregroundColor(Color.black.opacity(0.75))
+                    .padding(.top, 16)
+                    .padding(.leading, 28)
+
+                // Page text content
+                if !pageText.isEmpty {
+                    Text(pageText)
+                        .font(.system(size: 15, design: .serif))
+                        .foregroundColor(Color.black.opacity(0.8))
+                        .padding(.leading, 28)
+                        .padding(.trailing, 28)
+                        .padding(.top, 4)
+                }
+            }
+
+            // "Tap to edit" placeholder
+            if pageText.isEmpty {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Text("Tap to edit")
+                            .font(.system(size: 15, design: .serif))
+                            .foregroundColor(Color.gray.opacity(0.5))
+                            .italic()
+                            .padding(.leading, 28)
+                            .padding(.bottom, 16)
+                        Spacer()
+                    }
+                }
+            }
+
+            // Page number
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text("\(pageNumber)/\(totalPages)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color.gray.opacity(0.55))
+                        .padding(.trailing, 24)
+                        .padding(.bottom, 16)
+                }
+            }
+        }
+        .frame(width: pageWidth, height: pageHeight)
+    }
+}
+
 // MARK: - Book Item
 
 struct BookItem: View {
@@ -1160,10 +1240,13 @@ struct BookItem: View {
     var openProgress: CGFloat = 0
     var jump: CGFloat = 0
     var turn: CGFloat = 0
+    @Binding var currentPage: Int
     var distanceFromCenter: CGFloat = 0
     var shadowOpacity: Double = 0.15
     var scrollVelocity: CGFloat = 0
     var dropProgress: CGFloat = 1
+
+    @State private var pageDragOffset: CGFloat = 0
 
     /// Drop offset: starts 500pt below, rises to 0
     private var dropOffset: CGFloat {
@@ -1175,10 +1258,8 @@ struct BookItem: View {
         dropProgress < 1 ? Double(1 - dropProgress) * 8 : 0
     }
 
-    /// Turn the book to landscape (90° clockwise, spine goes to top)
-    private var turnAngle: Double {
-        Double(turn) * 90
-    }
+    /// Turn angle (disabled — book stays portrait)
+    private var turnAngle: Double { 0 }
 
     /// Vertical centering handled by carousel vOffset; no extra rise needed
     private var riseOffset: CGFloat { 0 }
@@ -1209,69 +1290,141 @@ struct BookItem: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // ── Open book spread (portrait space; top→right page, bottom→left after 90° CW) ──
+            // ── Open book view (single page with cover frame) ──
             if isOpening || openProgress > 0 {
+                let pageInset: CGFloat = 10
+                let safeIndex = min(currentPage, max(notebook.pages.count - 1, 0))
+                let pageText = notebook.pages.indices.contains(safeIndex) ? notebook.pages[safeIndex].text : ""
+                let pagesAfter = max(0, notebook.pages.count - safeIndex - 1)
+                let dragNorm = pageDragOffset / (bookHeight * 0.5)
+                let tiltDeg = max(-25, min(25, Double(dragNorm) * 25))
+
                 ZStack {
-                    VStack(spacing: 0) {
-                        // Top half → RIGHT side in landscape = COVER (back of front cover)
-                        ZStack {
-                            notebook.coverColor
-                            // Subtle inner shadow / darkening to look like inside of cover
-                            LinearGradient(
-                                colors: [Color.black.opacity(0.12), Color.black.opacity(0.04), Color.clear],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                            // Spine-side shadow near center crease
-                            VStack(spacing: 0) {
-                                Spacer()
-                                LinearGradient(
-                                    colors: [Color.clear, Color.black.opacity(0.10)],
-                                    startPoint: .top, endPoint: .bottom
-                                ).frame(height: bookHeight * 0.12)
-                            }
-                        }
-                        // Bottom half → LEFT side in landscape = PAGE
-                        ZStack {
-                            Color(hex: "F4F2EC")
-                            VStack(spacing: 0) {
-                                LinearGradient(
-                                    colors: [Color.black.opacity(0.06), Color.clear],
-                                    startPoint: .top, endPoint: .bottom
-                                ).frame(height: bookHeight * 0.12)
-                                Spacer()
-                            }
-                        }
+                    // Book interior (back cover visible as frame)
+                    notebook.coverColor
+
+                    // Inner edge shadow for depth
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.black.opacity(0.4), lineWidth: 4)
+                        .blur(radius: 4)
+                        .padding(3)
+
+                    // Page stack underneath (shows thickness)
+                    ForEach(0..<min(max(pagesAfter, 1), 5), id: \.self) { i in
+                        let stackOffset = CGFloat(min(max(pagesAfter, 1), 5) - i)
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color(hex: i % 2 == 0 ? "ECEAE4" : "F0EDE7"))
+                            .padding(pageInset)
+                            .offset(x: stackOffset * 1.0, y: stackOffset * 0.6)
+                            .shadow(color: Color.black.opacity(0.03), radius: 0.5, x: 0.5, y: 0.3)
                     }
-                    // Spine crease (horizontal here → vertical in landscape)
-                    ZStack {
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.02),
-                                        Color.black.opacity(0.18),
-                                        Color.black.opacity(0.28),
-                                        Color.black.opacity(0.18),
-                                        Color.black.opacity(0.02)
-                                    ],
-                                    startPoint: .top, endPoint: .bottom
+
+                    // Right-side page edges (thickness lines)
+                    let edgeCount = min(pagesAfter, 10)
+                    if edgeCount > 0 {
+                        Canvas { context, size in
+                            for i in 0..<edgeCount {
+                                let x = size.width - CGFloat(edgeCount - i) * 1.2
+                                let shade: Color = i % 2 == 0
+                                    ? Color(hex: "E0DDD7") : Color(hex: "D5D2CC")
+                                context.fill(
+                                    Path(CGRect(x: x, y: 6, width: 0.8, height: size.height - 12)),
+                                    with: .color(shade)
                                 )
-                            )
-                            .frame(height: 14)
-                        VStack(spacing: 8) {
-                            Rectangle().fill(Color.white.opacity(0.25)).frame(height: 0.5)
-                            Rectangle().fill(Color.white.opacity(0.25)).frame(height: 0.5)
+                            }
                         }
+                        .frame(
+                            width: CGFloat(edgeCount) * 1.2 + 2,
+                            height: bookHeight - pageInset * 2 - 8
+                        )
+                        .offset(x: (bookWidth / 2) - pageInset - 2)
+                        .allowsHitTesting(false)
                     }
+
+                    // Bottom page edges (thickness lines)
+                    let bottomEdgeCount = min(notebook.pageCount, 10)
+                    if bottomEdgeCount > 0 {
+                        Canvas { context, size in
+                            for i in 0..<bottomEdgeCount {
+                                let y = size.height - CGFloat(bottomEdgeCount - i) * 1.2
+                                let shade: Color = i % 2 == 0
+                                    ? Color(hex: "E0DDD7") : Color(hex: "D5D2CC")
+                                context.fill(
+                                    Path(CGRect(x: 6, y: y, width: size.width - 12, height: 0.8)),
+                                    with: .color(shade)
+                                )
+                            }
+                        }
+                        .frame(
+                            width: bookWidth - pageInset * 2 - 8,
+                            height: CGFloat(bottomEdgeCount) * 1.2 + 2
+                        )
+                        .offset(y: (bookHeight / 2) - pageInset - 2)
+                        .allowsHitTesting(false)
+                    }
+
+                    // Current page with drag tilt effect
+                    LinedPageView(
+                        pageText: pageText,
+                        pageNumber: safeIndex + 1,
+                        totalPages: notebook.pages.count,
+                        creationDate: notebook.creationDate,
+                        pageWidth: bookWidth - pageInset * 2,
+                        pageHeight: bookHeight - pageInset * 2
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(pageInset)
+                    .scaleEffect(1 + abs(dragNorm) * 0.008)
+                    .rotation3DEffect(
+                        .degrees(tiltDeg),
+                        axis: (x: 1, y: 0, z: 0),
+                        anchor: tiltDeg < 0 ? .top : .bottom,
+                        perspective: 0.3
+                    )
+                    .shadow(
+                        color: Color.black.opacity(min(Double(abs(dragNorm)) * 0.1, 0.1)),
+                        radius: 5,
+                        x: 0,
+                        y: tiltDeg < 0 ? -2 : 2
+                    )
                 }
                 .frame(width: bookWidth, height: bookHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                        .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
                 )
-                .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 6)
+                .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
                 .opacity(Double(openProgress))
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 20)
+                        .onChanged { value in
+                            pageDragOffset = value.translation.height
+                        }
+                        .onEnded { value in
+                            let threshold: CGFloat = 50
+                            let velocity = value.velocity.height
+                            if pageDragOffset < -threshold || velocity < -300 {
+                                // Swipe up → next page
+                                if currentPage < notebook.pages.count - 1 {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                        currentPage += 1
+                                    }
+                                }
+                            } else if pageDragOffset > threshold || velocity > 300 {
+                                // Swipe down → previous page
+                                if currentPage > 0 {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                        currentPage -= 1
+                                    }
+                                }
+                            }
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                                pageDragOffset = 0
+                            }
+                        }
+                )
             }
 
             // ── The book cover ──
@@ -1292,11 +1445,11 @@ struct BookItem: View {
                         .padding(.top, 13)
                     }
                 }
-                // Cover flips open from the spine (left edge) — semi-open, cover stays visible
+                // Cover flips upward from top edge — pages revealed below
                 .rotation3DEffect(
                     .degrees(Double(openProgress) * -95),
-                    axis: (x: 0, y: 1, z: 0),
-                    anchor: .leading,
+                    axis: (x: 1, y: 0, z: 0),
+                    anchor: .top,
                     perspective: 0.4
                 )
         }
@@ -1336,9 +1489,8 @@ struct BookItem: View {
         .shadow(color: Color.black.opacity(shadeLerp(0.06, 0.03)), radius: shadeLerp(3, 2), x: shadeLerp(-3, -2), y: shadeLerp(3, 2))
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
-        // Phase 1: Turn to landscape (90° CW, spine goes to top)
         .rotationEffect(.degrees(turnAngle))
-        // Phase 2: Concave perspective — looking down at the flat open book
+        // Concave perspective — looking down at the open book
         .rotation3DEffect(
             .degrees(Double(openProgress) * -15),
             axis: (x: 1, y: 0, z: 0),
