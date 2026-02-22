@@ -214,9 +214,9 @@ struct ContentView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 50)
                     
-                    ZStack {
+                    ZStack  {
                         // Centered: title + ellipsis
-                        HStack(spacing: 4) {
+                        HStack(spacing: 3) {
                             ZStack {
                                 // Always-present TextField (avoids first-keyboard lag)
                                 TextField("", text: $newBookTitle)
@@ -253,21 +253,17 @@ struct ContentView: View {
                             .background(Color(hex: "EFEFEF"))
                             .fixedSize()
                             Button(action: {}) {
-                                HStack(spacing: 6) {   // 👈 control
-                                    Rectangle()
-                                        .frame(width: 6.5, height: 6.5)
-                                           Rectangle()
-                                        .frame(width: 6.5, height: 6.5)
-                                           Rectangle()
-                                        .frame(width: 6.5, height: 6.5)
+                                HStack(spacing: 0) {   // 👈 control
+                                    Image(systemName: "chevron.down")
+                                        .foregroundStyle(Color.white)
+                                        .fontWeight(.bold)
                                 }
-                                .foregroundStyle(.black)
                             }
-                            .padding(.horizontal, 19)
-                            .padding(.vertical, 13.8
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 10.5
                             )
-                            .background(Color(hex: "EFEFEF"))
-                           
+                            .background(Color(hex: "#0e89fc"))
+                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
                         }
                         .scaleEffect(isNamingNewBook ? 1.25 : 1.0)
                         .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isNamingNewBook)
@@ -935,10 +931,12 @@ struct BookCarousel: View {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
                     let isOpeningThis = openBookIndex == index
                     let dist = continuousPosition(index: index, totalBookWidth: totalBookWidth)
-                    let itemScale = isOpeningThis ? (1.0 + openBookProgress * 0.25) : scaleForDistance(dist)
+                    let itemScale = isOpeningThis ? (1.0 + openBookProgress * 0.15) : scaleForDistance(dist)
                     let rotationDeg = isOpeningThis ? 0.0 : rotationForDistance(dist)
                     let shadowOp = shadowOpacityForDistance(dist)
-                    let vOffset = isOpeningThis ? CGFloat(0) : verticalOffsetForDistance(dist)
+                    // Center the book in the carousel when opening
+                    let openCenterOffset = shelfTotal + (bookHeight - geometry.size.height) / 2
+                    let vOffset = isOpeningThis ? openCenterOffset : verticalOffsetForDistance(dist)
                     let zIdx: Double = isOpeningThis ? 10 : Double(1000) - abs(Double(dist)) * 100
 
                     // Micro float: only the centered book gets a subtle breathing animation
@@ -1181,10 +1179,8 @@ struct BookItem: View {
         Double(turn) * 90
     }
 
-    /// Rise upward once turned landscape
-    private var riseOffset: CGFloat {
-        openProgress * -140
-    }
+    /// Vertical centering handled by carousel vOffset; no extra rise needed
+    private var riseOffset: CGFloat { 0 }
 
 
     /// Motion blur amount based on scroll velocity
@@ -1212,28 +1208,63 @@ struct BookItem: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // ── Blank page revealed behind the cover when opening ──
+            // ── Open book spread (portrait space; top→right page, bottom→left after 90° CW) ──
             if isOpening || openProgress > 0 {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "FCFBF7"))
-                    .frame(width: bookWidth, height: bookHeight)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
-                    )
-                    .overlay(
-                        VStack(spacing: bookHeight * 0.08) {
-                            ForEach(0..<10, id: \.self) { _ in
-                                Rectangle()
-                                    .fill(Color(hex: "DDD9D4").opacity(0.45))
-                                    .frame(height: 0.5)
+                ZStack {
+                    VStack(spacing: 0) {
+                        // Top half → RIGHT page in landscape
+                        ZStack {
+                            Color(hex: "F8F6F1")
+                            VStack(spacing: 0) {
+                                Spacer()
+                                LinearGradient(
+                                    colors: [Color.clear, Color.black.opacity(0.06)],
+                                    startPoint: .top, endPoint: .bottom
+                                ).frame(height: bookHeight * 0.12)
                             }
                         }
-                        .padding(.horizontal, bookWidth * 0.12)
-                        .padding(.vertical, bookHeight * 0.1)
-                        .opacity(Double(openProgress))
-                    )
-                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 4)
+                        // Bottom half → LEFT page in landscape
+                        ZStack {
+                            Color(hex: "F4F2EC")
+                            VStack(spacing: 0) {
+                                LinearGradient(
+                                    colors: [Color.black.opacity(0.06), Color.clear],
+                                    startPoint: .top, endPoint: .bottom
+                                ).frame(height: bookHeight * 0.12)
+                                Spacer()
+                            }
+                        }
+                    }
+                    // Spine crease (horizontal here → vertical in landscape)
+                    ZStack {
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.black.opacity(0.02),
+                                        Color.black.opacity(0.14),
+                                        Color.black.opacity(0.22),
+                                        Color.black.opacity(0.14),
+                                        Color.black.opacity(0.02)
+                                    ],
+                                    startPoint: .top, endPoint: .bottom
+                                )
+                            )
+                            .frame(height: 12)
+                        VStack(spacing: 8) {
+                            Rectangle().fill(Color.white.opacity(0.30)).frame(height: 0.5)
+                            Rectangle().fill(Color.white.opacity(0.30)).frame(height: 0.5)
+                        }
+                    }
+                }
+                .frame(width: bookWidth, height: bookHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 6)
+                .opacity(Double(openProgress))
             }
 
             // ── The book cover ──
@@ -1300,7 +1331,14 @@ struct BookItem: View {
         .blur(radius: motionBlurRadius)
         // Phase 1: Turn to landscape (90° CW, spine goes to top)
         .rotationEffect(.degrees(turnAngle))
-        // Phase 2: Rise upward
+        // Phase 2: Concave perspective — looking down at the flat open book
+        .rotation3DEffect(
+            .degrees(Double(openProgress) * -15),
+            axis: (x: 1, y: 0, z: 0),
+            anchor: .center,
+            perspective: 0.5
+        )
+        // Vertical offset
         .offset(y: riseOffset)
         // Jump offset (for open animation)
         .offset(y: jump * -40)
