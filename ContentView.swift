@@ -105,6 +105,7 @@ struct ContentView: View {
     @State private var currentPage: Int = 0
     @State private var flipProgress: CGFloat = 0
     @State private var pageDragOffset: CGFloat = 0
+    @State private var bookRotation: CGFloat = 0
     @State private var newBookDrop: CGFloat = 1
     @State private var droppingBookIndex: Int? = nil
     @State private var isAddingBook: Bool = false
@@ -391,6 +392,7 @@ struct ContentView: View {
                         },
                         currentPage: $currentPage,
                         pageDragOffset: pageDragOffset,
+                        bookRotation: bookRotation,
                         newBookDrop: newBookDrop,
                         droppingBookIndex: droppingBookIndex,
                         entranceSlide: entranceSlide
@@ -554,11 +556,19 @@ struct ContentView: View {
         openBookProgress = 0
         bookJump = 0
         bookTurn = 0
+        bookRotation = 0
         currentPage = 0
 
-        // Open cover + scale up
-        withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
-            openBookProgress = 1
+        // Phase 1: Rotate book horizontal (90° clockwise)
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+            bookRotation = 1
+        }
+
+        // Phase 2: Open cover after rotation settles
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
+                openBookProgress = 1
+            }
         }
     }
 
@@ -569,12 +579,20 @@ struct ContentView: View {
 
     private func performCoverCloseAnimation() {
         pageDragOffset = 0
+        // Phase 1: Close cover
         withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
             openBookProgress = 0
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if openBookProgress == 0 {
+        // Phase 2: Rotate back to portrait
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                bookRotation = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            if openBookProgress == 0 && bookRotation == 0 {
                 openBookIndex = nil
             }
         }
@@ -824,6 +842,7 @@ struct BookCarousel: View {
     let onBookTap: (Int) -> Void
     @Binding var currentPage: Int
     var pageDragOffset: CGFloat = 0
+    var bookRotation: CGFloat = 0
     var newBookDrop: CGFloat = 1
     var droppingBookIndex: Int? = nil
     var entranceSlide: CGFloat = 0
@@ -976,6 +995,7 @@ struct BookCarousel: View {
                         turn: isOpeningThis ? bookTurn : 0,
                         currentPage: $currentPage,
                         pageDragOffset: isOpeningThis ? pageDragOffset : 0,
+                        bookRotation: isOpeningThis ? bookRotation : 0,
                         distanceFromCenter: dist,
                         shadowOpacity: shadowOp,
                         scrollVelocity: dragVelocity,
@@ -1275,6 +1295,7 @@ struct BookItem: View {
     var turn: CGFloat = 0
     @Binding var currentPage: Int
     var pageDragOffset: CGFloat = 0
+    var bookRotation: CGFloat = 0
     var distanceFromCenter: CGFloat = 0
     var shadowOpacity: Double = 0.15
     var scrollVelocity: CGFloat = 0
@@ -1471,9 +1492,9 @@ struct BookItem: View {
                         .padding(.top, 13)
                     }
                 }
-                // Cover flips upward — spine at top (horizontal book)
+                // Cover flips upward past vertical — face points toward viewer
                 .rotation3DEffect(
-                    .degrees(Double(openProgress) * -95),
+                    .degrees(Double(openProgress) * -300),
                     axis: (x: 1, y: 0, z: 0),
                     anchor: .top,
                     perspective: 0.4
@@ -1516,12 +1537,14 @@ struct BookItem: View {
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         .rotationEffect(.degrees(turnAngle))
-        // Convex perspective — page bows toward viewer
+        // Rotate horizontal (90° clockwise) before opening
+        .rotationEffect(.degrees(Double(bookRotation) * 90))
+        // Subtle convex — viewed slightly from above
         .rotation3DEffect(
-            .degrees(Double(openProgress) * 12),
+            .degrees(Double(openProgress) * -5),
             axis: (x: 1, y: 0, z: 0),
-            anchor: .top,
-            perspective: 0.35
+            anchor: .center,
+            perspective: 0.3
         )
         // Vertical offset
         .offset(y: riseOffset)
@@ -1535,6 +1558,7 @@ struct BookItem: View {
         )
         .opacity(dropProgress < 0.01 ? 0 : 1)
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: openProgress)
+        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: bookRotation)
         .animation(.spring(response: 0.35, dampingFraction: 0.5), value: jump)
         .animation(.spring(response: 0.6, dampingFraction: 0.72), value: turn)
     }
