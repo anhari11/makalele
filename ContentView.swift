@@ -232,7 +232,7 @@ struct ContentView: View {
                                 if isNamingNewBook && newBookTitle.isEmpty {
                                     HStack(spacing: 0) {
                                         Text("Untitled")
-                                            .font(.system(size: 17, weight: .bold))
+                                            .font(.system(size: 22, weight: .bold))
                                             .foregroundColor(.gray.opacity(0.5))
                                         Rectangle()
                                             .fill(Color.black)
@@ -244,12 +244,12 @@ struct ContentView: View {
 
                                 if !isNamingNewBook {
                                     Text(notebooks[selectedIndex].title)
-                                        .font(.system(size: 17, weight: .bold))
+                                        .font(.system(size: 22, weight: .bold))
                                         .foregroundColor(.black)
                                 }
                             }
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .padding(.horizontal, 18)
                             .background(Color(hex: "EFEFEF"))
                             .fixedSize()
                             Button(action: {}) {
@@ -257,13 +257,14 @@ struct ContentView: View {
                                     Image(systemName: "chevron.down")
                                         .foregroundStyle(Color.white)
                                         .fontWeight(.bold)
+                                        .font(.system(size: 23, weight: .bold))
+                                        
                                 }
                             }
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 10.5
-                            )
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 13.5)
                             .background(Color(hex: "#0e89fc"))
-                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
+                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 8, topTrailingRadius: 8))
                         }
                         .scaleEffect(isNamingNewBook ? 1.25 : 1.0)
                         .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isNamingNewBook)
@@ -1212,18 +1213,24 @@ struct BookItem: View {
             if isOpening || openProgress > 0 {
                 ZStack {
                     VStack(spacing: 0) {
-                        // Top half → RIGHT page in landscape
+                        // Top half → RIGHT side in landscape = COVER (back of front cover)
                         ZStack {
-                            Color(hex: "F8F6F1")
+                            notebook.coverColor
+                            // Subtle inner shadow / darkening to look like inside of cover
+                            LinearGradient(
+                                colors: [Color.black.opacity(0.12), Color.black.opacity(0.04), Color.clear],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                            // Spine-side shadow near center crease
                             VStack(spacing: 0) {
                                 Spacer()
                                 LinearGradient(
-                                    colors: [Color.clear, Color.black.opacity(0.06)],
+                                    colors: [Color.clear, Color.black.opacity(0.10)],
                                     startPoint: .top, endPoint: .bottom
                                 ).frame(height: bookHeight * 0.12)
                             }
                         }
-                        // Bottom half → LEFT page in landscape
+                        // Bottom half → LEFT side in landscape = PAGE
                         ZStack {
                             Color(hex: "F4F2EC")
                             VStack(spacing: 0) {
@@ -1242,18 +1249,18 @@ struct BookItem: View {
                                 LinearGradient(
                                     colors: [
                                         Color.black.opacity(0.02),
-                                        Color.black.opacity(0.14),
-                                        Color.black.opacity(0.22),
-                                        Color.black.opacity(0.14),
+                                        Color.black.opacity(0.18),
+                                        Color.black.opacity(0.28),
+                                        Color.black.opacity(0.18),
                                         Color.black.opacity(0.02)
                                     ],
                                     startPoint: .top, endPoint: .bottom
                                 )
                             )
-                            .frame(height: 12)
+                            .frame(height: 14)
                         VStack(spacing: 8) {
-                            Rectangle().fill(Color.white.opacity(0.30)).frame(height: 0.5)
-                            Rectangle().fill(Color.white.opacity(0.30)).frame(height: 0.5)
+                            Rectangle().fill(Color.white.opacity(0.25)).frame(height: 0.5)
+                            Rectangle().fill(Color.white.opacity(0.25)).frame(height: 0.5)
                         }
                     }
                 }
@@ -1285,14 +1292,13 @@ struct BookItem: View {
                         .padding(.top, 13)
                     }
                 }
-                // Cover flips open from the spine (left edge)
+                // Cover flips open from the spine (left edge) — semi-open, cover stays visible
                 .rotation3DEffect(
-                    .degrees(Double(openProgress) * -150),
+                    .degrees(Double(openProgress) * -95),
                     axis: (x: 0, y: 1, z: 0),
                     anchor: .leading,
                     perspective: 0.4
                 )
-                .opacity(openProgress > 0.7 ? Double(1 - (openProgress - 0.7) / 0.3) : 1)
         }
         .frame(width: bookWidth, height: bookHeight)
         // Vertical shade along the left edge
