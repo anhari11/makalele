@@ -531,6 +531,33 @@ struct ContentView: View {
                         }
                         .zIndex(4)
                 }
+
+                // Bottom bar with white triangle notch
+                VStack(spacing: 0) {
+                    Spacer()
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    notebooks[selectedIndex].coverColor.opacity(0.25),
+                                    notebooks[selectedIndex].spineColor.opacity(0.45)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(maxWidth: .infinity)
+                        .frame(height: geometry.size.height * 0.056)
+                        .overlay(alignment: .top) {
+                            Triangle()
+                                .fill(Color.white)
+                                .rotationEffect(.degrees(180))
+                                .frame(width: 40, height: 20)
+                                .offset(y: -10)
+                        }
+                }
+                .edgesIgnoringSafeArea(.bottom)
+                .zIndex(10)
             }
         }
         .ignoresSafeArea(.keyboard)
