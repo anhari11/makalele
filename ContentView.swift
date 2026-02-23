@@ -535,26 +535,10 @@ struct ContentView: View {
                 // Bottom bar with white triangle notch
                 VStack(spacing: 0) {
                     Spacer()
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    notebooks[selectedIndex].coverColor.opacity(0.25),
-                                    notebooks[selectedIndex].spineColor.opacity(0.45)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                    NotchLine(notchWidth: 40, notchHeight: 20)
+                        .stroke(notebooks[selectedIndex].coverColor.opacity(0.2), lineWidth: 1)
                         .frame(maxWidth: .infinity)
                         .frame(height: geometry.size.height * 0.056)
-                        .overlay(alignment: .top) {
-                            Triangle()
-                                .fill(Color.white)
-                                .rotationEffect(.degrees(180))
-                                .frame(width: 40, height: 20)
-                                .offset(y: -10)
-                        }
                 }
                 .edgesIgnoringSafeArea(.bottom)
                 .zIndex(10)
@@ -837,6 +821,24 @@ struct BookFloorShadow: Shape {
             path.addLine(to: CGPoint(x: rect.maxX * 0.5, y: rect.maxY))
             path.closeSubpath()
         }
+        return path
+    }
+}
+
+// MARK: - Notch Line Shape
+
+struct NotchLine: Shape {
+    let notchWidth: CGFloat
+    let notchHeight: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let midX = rect.midX
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: midX - notchWidth / 2, y: 0))
+        path.addLine(to: CGPoint(x: midX, y: notchHeight))
+        path.addLine(to: CGPoint(x: midX + notchWidth / 2, y: 0))
+        path.addLine(to: CGPoint(x: rect.maxX, y: 0))
         return path
     }
 }
