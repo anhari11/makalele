@@ -776,6 +776,22 @@ struct CircleButton<Content: View>: View {
     }
 }
 
+// MARK: - Blur View (UIKit backdrop blur)
+
+#if canImport(UIKit)
+struct BlurView: UIViewRepresentable {
+    var style: UIBlurEffect.Style
+
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        UIVisualEffectView(effect: UIBlurEffect(style: style))
+    }
+
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
+        uiView.effect = UIBlurEffect(style: style)
+    }
+}
+#endif
+
 // MARK: - Diagonal Shadow Shape
 
 struct DiagonalShadowShape: Shape {
@@ -1544,20 +1560,22 @@ struct BookItem: View {
                         Button(action: {}) {
                             Text("Edit")
                                 .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(notebook.hasCoverArt ? .black : .white)
                         }
                         .padding(.horizontal, 17)
                         .padding(.vertical, 7)
-                        .background(
-                            Group {
-                                if notebook.hasCoverArt {
-                                    AnyView(Color.white.opacity(0.20).background(.thinMaterial))
-                                } else {
-                                    AnyView(Color.black.opacity(0.20))
-                                }
+                        .background {
+                            if notebook.hasCoverArt {
+                                #if canImport(UIKit)
+                                BlurView(style: .systemUltraThinMaterialLight)
+                                    .clipShape(Capsule())
+                                #else
+                                Capsule().fill(Color.white.opacity(0.5))
+                                #endif
+                            } else {
+                                Capsule().fill(Color.black.opacity(0.20))
                             }
-                        )
-                        .clipShape(Capsule())
+                        }
                         .padding(.trailing, 13)
                         .padding(.top, 13)
                     }
