@@ -82,7 +82,7 @@ struct Notebook: Identifiable {
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "ffdff4"), spineColor: Color(hex: "e8c0d8"), pageEdgeColor: Color(hex: "f0d0e4"), hasCoverArt: true, textureURL: "ibiza", creationDate: {
+        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "ffdff4"), spineColor: Color(hex: "ffdff4"), pageEdgeColor: Color(hex: "f0d0e4"), hasCoverArt: true, textureURL: "ibiza", creationDate: {
             var c = DateComponents(); c.year = 2025; c.month = 3; c.day = 14
             return Calendar.current.date(from: c)!
         }()),
@@ -370,7 +370,7 @@ struct ContentView: View {
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
                     .zIndex(2)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, -16)
 
                     // Notebook Carousel
                     BookCarousel(
@@ -1560,7 +1560,7 @@ struct BookItem: View {
                         Button(action: {}) {
                             Text("Edit")
                                 .font(.system(size: 20, weight: .bold))
-                                .foregroundColor(notebook.hasCoverArt ? .black : .white)
+                                .foregroundColor(notebook.hasCoverArt ? .white : .white)
                         }
                         .padding(.horizontal, 17)
                         .padding(.vertical, 7)
@@ -1570,7 +1570,7 @@ struct BookItem: View {
                                 BlurView(style: .systemUltraThinMaterialLight)
                                     .clipShape(Capsule())
                                 #else
-                                Capsule().fill(Color.white.opacity(0.5))
+                                Capsule().fill(Color.white.opacity(1))
                                 #endif
                             } else {
                                 Capsule().fill(Color.black.opacity(0.20))
