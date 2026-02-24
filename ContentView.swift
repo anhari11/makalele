@@ -82,7 +82,7 @@ struct Notebook: Identifiable {
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: "", creationDate: {
+        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "ffdff4"), spineColor: Color(hex: "e8c0d8"), pageEdgeColor: Color(hex: "f0d0e4"), hasCoverArt: true, textureURL: "ibiza", creationDate: {
             var c = DateComponents(); c.year = 2025; c.month = 3; c.day = 14
             return Calendar.current.date(from: c)!
         }()),
@@ -172,11 +172,6 @@ struct ContentView: View {
 
                     // Top navigation bar
                     HStack {
-                        Button(action: {}) {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 22, weight: .medium))
-                                .foregroundColor(uiColor)
-                        }
                         Spacer()
 
                       //  HStack {
@@ -945,10 +940,60 @@ struct BookCarousel: View {
             VStack {
                 Spacer()
                 VStack(spacing: 0) {
+                    // Top edge of shelf
+                    Rectangle()
+                        .fill(Color(hex: "E0E0E0"))
+                        .frame(height: 1)
+
                     // Top surface - perspective trapezoid
-                    ShelfTopShape()
-                        .fill(Color.white)
-                        .frame(height: shelfTopSurface)
+                    ZStack {
+                        ShelfTopShape()
+                            .fill(Color.white)
+
+                        // Emojis, stamps & graffiti scattered on shelf, flattened as if lying on the surface
+                        GeometryReader { shelfGeo in
+                            let flatTilt: Double = 60
+                            let flatPersp: Double = 0.4
+
+                            // Stamps (passport / postmark images)
+                            let stamps: [(String, CGFloat, CGFloat, Double, CGFloat)] = [
+                                // (image, x%, y%, rotation, size)
+                                ("stamp1", 0.30, 0.42, -12, isIPad ? 70 : 48),
+                                ("stamp2", 0.65, 0.50,   8, isIPad ? 50 : 34),
+                                ("stamp3", 0.44, 0.60,  -5, isIPad ? 45 : 30),
+                            ]
+                            ForEach(Array(stamps.enumerated()), id: \.offset) { _, s in
+                                Image(s.0)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: s.4)
+                                    .opacity(0.35)
+                                    .rotationEffect(.degrees(s.3))
+                                    .rotation3DEffect(.degrees(flatTilt), axis: (x: 1, y: 0, z: 0), perspective: flatPersp)
+                                    .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: 1)
+                                    .position(x: shelfGeo.size.width * s.1, y: shelfGeo.size.height * s.2)
+                            }
+
+                            // Graffiti tags
+                            let graffiti: [(String, CGFloat, CGFloat, Double, CGFloat)] = [
+                                ("graffiti1", 0.14, 0.38,   6, isIPad ? 80 : 55),
+                                ("graffiti2", 0.75, 0.42, -10, isIPad ? 90 : 60),
+                                ("graffiti3", 0.50, 0.55,   3, isIPad ? 70 : 48),
+                            ]
+                            ForEach(Array(graffiti.enumerated()), id: \.offset) { _, g in
+                                Image(g.0)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: g.4)
+                                    .opacity(0.30)
+                                    .rotationEffect(.degrees(g.3))
+                                    .rotation3DEffect(.degrees(flatTilt), axis: (x: 1, y: 0, z: 0), perspective: flatPersp)
+                                    .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: 1)
+                                    .position(x: shelfGeo.size.width * g.1, y: shelfGeo.size.height * g.2)
+                            }
+                        }
+                    }
+                    .frame(height: shelfTopSurface)
 
                     // Highlight lip
                     Rectangle()
@@ -971,20 +1016,8 @@ struct BookCarousel: View {
                         .fill(Color(hex: "B0B0B0"))
                         .frame(height: 0.5)
 
-                    // Under-shelf drop shadow
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.16),
-                                    Color.black.opacity(0.08),
-                                    Color.black.opacity(0.03),
-                                    Color.black.opacity(0.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                    // Under-shelf drop shadow (hidden)
+                    Color.clear
                         .frame(height: shelfShadowHeight)
                 }
                 .compositingGroup()
@@ -1515,8 +1548,16 @@ struct BookItem: View {
                         }
                         .padding(.horizontal, 17)
                         .padding(.vertical, 7)
-                        .background(Color.black.opacity(0.20))
-                        .cornerRadius(100)
+                        .background(
+                            Group {
+                                if notebook.hasCoverArt {
+                                    AnyView(Color.white.opacity(0.20).background(.thinMaterial))
+                                } else {
+                                    AnyView(Color.black.opacity(0.20))
+                                }
+                            }
+                        )
+                        .clipShape(Capsule())
                         .padding(.trailing, 13)
                         .padding(.top, 13)
                     }
@@ -1634,95 +1675,98 @@ struct BookCover: View {
     private var groove2X: CGFloat { width * 0.095 }
 
     var body: some View {
-        Canvas { context, size in
-            let rect = CGRect(origin: .zero, size: size)
+        ZStack {
+            Canvas { context, size in
+                let rect = CGRect(origin: .zero, size: size)
 
-            let bookPath = BookShape(
-                cornerRadius: cornerRad,
-                insetRight: groove2X + 4
-            ).path(in: rect)
+                let bookPath = BookShape(
+                    cornerRadius: cornerRad,
+                    insetRight: groove2X + 4
+                ).path(in: rect)
 
-            // 1. Base cover fill
-            context.fill(bookPath, with: .color(notebook.coverColor))
+                // 1. Base cover fill — use spineColor for spine area when cover art present
+                let spineBaseColor = notebook.hasCoverArt ? notebook.spineColor : notebook.coverColor
+                context.fill(bookPath, with: .color(spineBaseColor))
 
-            // 2. Paper grain texture
-            let grainGrad = Gradient(stops: [
-                .init(color: Color.white.opacity(0.03), location: 0),
-                .init(color: Color.black.opacity(0.02), location: 0.5),
-                .init(color: Color.white.opacity(0.01), location: 1.0)
-            ])
-            context.fill(bookPath, with: .radialGradient(
-                grainGrad,
-                center: CGPoint(x: size.width * 0.3, y: size.height * 0.2),
-                startRadius: 0,
-                endRadius: max(size.width, size.height) * 0.9
-            ))
+                // 2. Paper grain texture
+                let grainGrad = Gradient(stops: [
+                    .init(color: Color.white.opacity(0.03), location: 0),
+                    .init(color: Color.black.opacity(0.02), location: 0.5),
+                    .init(color: Color.white.opacity(0.01), location: 1.0)
+                ])
+                context.fill(bookPath, with: .radialGradient(
+                    grainGrad,
+                    center: CGPoint(x: size.width * 0.3, y: size.height * 0.2),
+                    startRadius: 0,
+                    endRadius: max(size.width, size.height) * 0.9
+                ))
 
-            // 3. Primary groove line
-            let g1Rect = CGRect(x: groove1X - 3, y: 0, width: 7, height: size.height)
-            let g1Path = Path(g1Rect).intersection(bookPath)
-            let g1Grad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.26), location: 0),
-                .init(color: Color.black.opacity(0.34), location: 0.45),
-                .init(color: Color.black.opacity(0.12), location: 0.6),
-                .init(color: Color.white.opacity(0.08), location: 0.85),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(g1Path, with: .linearGradient(
-                g1Grad,
-                startPoint: CGPoint(x: g1Rect.minX, y: rect.midY),
-                endPoint: CGPoint(x: g1Rect.maxX, y: rect.midY)
-            ))
+                // 3. Primary groove line — tinted with spine color when cover art
+                let g1Rect = CGRect(x: groove1X - 3, y: 0, width: 7, height: size.height)
+                let g1Path = Path(g1Rect).intersection(bookPath)
+                let g1Grad = Gradient(stops: [
+                    .init(color: Color.black.opacity(0.26), location: 0),
+                    .init(color: Color.black.opacity(0.34), location: 0.45),
+                    .init(color: Color.black.opacity(0.12), location: 0.6),
+                    .init(color: Color.white.opacity(0.08), location: 0.85),
+                    .init(color: Color.clear, location: 1.0)
+                ])
+                context.fill(g1Path, with: .linearGradient(
+                    g1Grad,
+                    startPoint: CGPoint(x: g1Rect.minX, y: rect.midY),
+                    endPoint: CGPoint(x: g1Rect.maxX, y: rect.midY)
+                ))
 
-            // 4. Second thinner groove line
-            let g2Rect = CGRect(x: groove2X - 0.75, y: 0, width: 2, height: size.height)
-            let g2Path = Path(g2Rect).intersection(bookPath)
-            let g2Grad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.22), location: 0),
-                .init(color: Color.black.opacity(0.26), location: 0.4),
-                .init(color: Color.clear, location: 0.6),
-                .init(color: Color.white.opacity(0.06), location: 0.9),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(g2Path, with: .linearGradient(
-                g2Grad,
-                startPoint: CGPoint(x: g2Rect.minX, y: rect.midY),
-                endPoint: CGPoint(x: g2Rect.maxX, y: rect.midY)
-            ))
+                // 4. Second thinner groove line
+                let g2Rect = CGRect(x: groove2X - 0.75, y: 0, width: 2, height: size.height)
+                let g2Path = Path(g2Rect).intersection(bookPath)
+                let g2Grad = Gradient(stops: [
+                    .init(color: Color.black.opacity(0.22), location: 0),
+                    .init(color: Color.black.opacity(0.26), location: 0.4),
+                    .init(color: Color.clear, location: 0.6),
+                    .init(color: Color.white.opacity(0.06), location: 0.9),
+                    .init(color: Color.clear, location: 1.0)
+                ])
+                context.fill(g2Path, with: .linearGradient(
+                    g2Grad,
+                    startPoint: CGPoint(x: g2Rect.minX, y: rect.midY),
+                    endPoint: CGPoint(x: g2Rect.maxX, y: rect.midY)
+                ))
 
-            // 5. Raised highlight lip
-            let lipRect = CGRect(x: groove2X + 3, y: 0, width: 6, height: size.height)
-            let lipPath = Path(lipRect).intersection(bookPath)
-            let lipGrad = Gradient(stops: [
-                .init(color: Color.white.opacity(0.11), location: 0),
-                .init(color: Color.white.opacity(0.05), location: 0.3),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(lipPath, with: .linearGradient(
-                lipGrad,
-                startPoint: CGPoint(x: lipRect.minX, y: rect.midY),
-                endPoint: CGPoint(x: lipRect.maxX, y: rect.midY)
-            ))
+                // 5. Raised highlight lip
+                let lipRect = CGRect(x: groove2X + 3, y: 0, width: 6, height: size.height)
+                let lipPath = Path(lipRect).intersection(bookPath)
+                let lipGrad = Gradient(stops: [
+                    .init(color: Color.white.opacity(0.11), location: 0),
+                    .init(color: Color.white.opacity(0.05), location: 0.3),
+                    .init(color: Color.clear, location: 1.0)
+                ])
+                context.fill(lipPath, with: .linearGradient(
+                    lipGrad,
+                    startPoint: CGPoint(x: lipRect.minX, y: rect.midY),
+                    endPoint: CGPoint(x: lipRect.maxX, y: rect.midY)
+                ))
 
-            // 6. Ambient occlusion
-            let aoRect = CGRect(x: groove2X + 2, y: 0, width: 3, height: size.height)
-            let aoPath = Path(aoRect).intersection(bookPath)
-            let aoGrad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.10), location: 0),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(aoPath, with: .linearGradient(
-                aoGrad,
-                startPoint: CGPoint(x: aoRect.minX, y: rect.midY),
-                endPoint: CGPoint(x: aoRect.maxX, y: rect.midY)
-            ))
+                // 6. Ambient occlusion
+                let aoRect = CGRect(x: groove2X + 2, y: 0, width: 3, height: size.height)
+                let aoPath = Path(aoRect).intersection(bookPath)
+                let aoGrad = Gradient(stops: [
+                    .init(color: Color.black.opacity(0.10), location: 0),
+                    .init(color: Color.clear, location: 1.0)
+                ])
+                context.fill(aoPath, with: .linearGradient(
+                    aoGrad,
+                    startPoint: CGPoint(x: aoRect.minX, y: rect.midY),
+                    endPoint: CGPoint(x: aoRect.maxX, y: rect.midY)
+                ))
 
-            // 7. Edge stroke (subtle)
-            context.stroke(bookPath, with: .color(Color.black.opacity(0.04)), lineWidth: 0.5)
+                // 7. Edge stroke (subtle)
+                context.stroke(bookPath, with: .color(Color.black.opacity(0.04)), lineWidth: 0.5)
 
-            // 10. Deep pressed title text
-            let cleanTitle = String(notebook.title.unicodeScalars.filter { !$0.properties.isEmojiPresentation }).trimmingCharacters(in: .whitespaces)
-            let titleFont: Font = .system(size: size.width * 0.09, weight: .medium)
+                if !notebook.hasCoverArt {
+                    // 10. Deep pressed title text
+                    let cleanTitle = String(notebook.title.unicodeScalars.filter { !$0.properties.isEmojiPresentation }).trimmingCharacters(in: .whitespaces)
+                    let titleFont: Font = .system(size: size.width * 0.09, weight: .medium)
 
             let measureResolved = context.resolve(Text(cleanTitle).font(titleFont).foregroundColor(.black))
             let titleSize = measureResolved.measure(in: CGSize(width: size.width * 0.75, height: size.height))
@@ -1751,6 +1795,27 @@ struct BookCover: View {
             aoCtx.addFilter(.blur(radius: 1.5))
             let aoResolved2 = aoCtx.resolve(Text(cleanTitle).font(titleFont).foregroundColor(Color.black.opacity(0.10)))
             aoCtx.draw(aoResolved2, at: CGPoint(x: titleCenter.x, y: titleCenter.y + 0.5), anchor: .center)
+                }
+            }
+
+            // Cover art image overlay — from spine groove to right edge
+            if notebook.hasCoverArt && !notebook.textureURL.isEmpty {
+                let coverStartX = groove2X + 6
+                let coverWidth = width - coverStartX
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: coverStartX)
+                    ZStack {
+                        notebook.coverColor
+                        Image(notebook.textureURL)
+                            .resizable()
+                            .scaledToFit()
+                    }
+                    .frame(width: coverWidth, height: height)
+                    .clipped()
+                }
+                .frame(width: width, height: height)
+                .clipShape(BookShape(cornerRadius: cornerRad, insetRight: groove2X + 4))
+            }
         }
         .frame(width: width, height: height)
     }
