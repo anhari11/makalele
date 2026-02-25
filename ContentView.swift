@@ -327,7 +327,7 @@ struct ContentView: View {
                                     Text("Share with friends")
                                         .foregroundStyle(uiColor)
                                         .fontWeight(.bold)
-                                        .font(.system(size: 30, weight: .bold))
+                                        .font(.system(size: 17, weight: .bold))
                                     Image(systemName: "chevron.right")
                                         .foregroundStyle(uiColor)
                                         .font(.system(size: 14, weight: .semibold))
@@ -455,8 +455,75 @@ struct ContentView: View {
 
                     Spacer()
 
-                    // Make a new album (mobile only, at bottom)
-                    if !isIPad {
+                    // Bottom action buttons
+                    if isIPad {
+                        VStack(spacing: 0) {
+                            // Export row
+                            Button(action: {}) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 17, weight: .regular))
+                                        .foregroundStyle(uiColor)
+                                        .frame(width: 28)
+                                    Text("Export Album")
+                                        .foregroundStyle(Color.black)
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#C7C7CC"))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 13)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.leading, 56)
+
+                            // New book row
+                            Button(action: { addNewAlbum() }) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 17, weight: .regular))
+                                        .foregroundStyle(uiColor)
+                                        .frame(width: 28)
+                                    Text("New Album")
+                                        .foregroundStyle(Color.black)
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#C7C7CC"))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 13)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.leading, 56)
+
+                            // Delete row
+                            Button(action: {}) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 17, weight: .regular))
+                                        .foregroundStyle(.red)
+                                        .frame(width: 28)
+                                    Text("Delete Album")
+                                        .foregroundStyle(.red)
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 13)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .background(Color(hex: "F2F2F7"))
+                        .cornerRadius(12)
+                        .frame(width: min(geometry.size.width, geometry.size.height) * 0.48)
+                        .padding(.bottom, 16)
+                    } else {
                         Button(action: { addNewAlbum() }) {
                             HStack(alignment: .center, spacing: 6) {
                                 Spacer()
@@ -487,40 +554,7 @@ struct ContentView: View {
                             .stroke(notebooks[selectedIndex].coverColor.opacity(0.2), lineWidth: 1)
                             .frame(maxWidth: .infinity)
                             .frame(height: 20)
-                            .padding(.bottom, 8)
-
-                        // Get physical version
-                        HStack {
-                            Button(action: {}) {
-                                HStack(spacing: 10) {
-                                    Text("📦")
-                                        .font(.system(size: 28))
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Get physical version")
-                                            .foregroundStyle(Color.black)
-                                            .fontWeight(.bold)
-                                            .font(.system(size: 15))
-                                        Text("Print your album as a real book")
-                                            .foregroundStyle(Color(hex: "#898988"))
-                                            .font(.system(size: 12))
-                                    }
-
-                                    Spacer()
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(Color(hex: "#C0C0C0"))
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                                .background(Color(hex: "F5F5F5"))
-                                .cornerRadius(14)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+                            .padding(.bottom, 16)
                     }
                 }
                 .scaleEffect(isNamingNewBook ? 1.15 : 1.0, anchor: UnitPoint(x: 0.5, y: 0.13))
@@ -536,20 +570,20 @@ struct ContentView: View {
                         .gesture(
                             DragGesture(minimumDistance: 20)
                                 .onChanged { value in
-                                    pageDragOffset = value.translation.height
+                                    pageDragOffset = value.translation.width
                                 }
                                 .onEnded { value in
-                                    let threshold: CGFloat = 50
-                                    let velocity = value.velocity.height
-                                    if pageDragOffset < -threshold || velocity < -300 {
-                                        // Swipe up → next page
+                                    let threshold: CGFloat = 80
+                                    let velocity = value.velocity.width
+                                    if pageDragOffset < -threshold || velocity < -400 {
+                                        // Swipe left → next page
                                         if currentPage < notebooks[openIndex].pages.count - 1 {
                                             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                                                 currentPage += 1
                                             }
                                         }
-                                    } else if pageDragOffset > threshold || velocity > 300 {
-                                        // Swipe down → previous page
+                                    } else if pageDragOffset > threshold || velocity > 400 {
+                                        // Swipe right → previous page
                                         if currentPage > 0 {
                                             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                                                 currentPage -= 1
@@ -605,16 +639,9 @@ struct ContentView: View {
         bookRotation = 0
         currentPage = 0
 
-        // Phase 1: Rotate book horizontal (90° clockwise)
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
-            bookRotation = 1
-        }
-
-        // Phase 2: Open cover after rotation settles
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
-                openBookProgress = 1
-            }
+        // Cover flips open around the spine (Y-axis)
+        withAnimation(.spring(response: 0.65, dampingFraction: 0.75)) {
+            openBookProgress = 1
         }
     }
 
@@ -625,20 +652,13 @@ struct ContentView: View {
 
     private func performCoverCloseAnimation() {
         pageDragOffset = 0
-        // Phase 1: Close cover
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+        // Cover folds shut along the spine
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.80)) {
             openBookProgress = 0
         }
 
-        // Phase 2: Rotate back to portrait
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
-                bookRotation = 0
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            if openBookProgress == 0 && bookRotation == 0 {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            if openBookProgress == 0 {
                 openBookIndex = nil
             }
         }
@@ -1461,126 +1481,139 @@ struct BookItem: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // ── Open book view (single page with cover frame) ──
+            // ── Open book view (3D page spread) ──
             if isOpening || openProgress > 0 {
                 let pageInset: CGFloat = 10
                 let safeIndex = min(currentPage, max(notebook.pages.count - 1, 0))
                 let pageText = notebook.pages.indices.contains(safeIndex) ? notebook.pages[safeIndex].text : ""
-                let pagesAfter = max(0, notebook.pages.count - safeIndex - 1)
-                let dragNorm = pageDragOffset / (bookHeight * 0.5)
-                let tiltDeg = max(-25, min(25, Double(dragNorm) * 25))
+
+                // Page dimensions: each page is half the book width
+                let pageW = bookWidth - pageInset * 2
+                let pageH = bookHeight - pageInset * 2
+                // Drag ratio: how far the user has dragged (-1 to 1)
+                // Negative pageDragOffset = swiping left = turning forward
+                let dragRatio = -pageDragOffset / (bookWidth * 0.4)
+                let clampedDrag = max(-1.0, min(1.0, dragRatio))
+
+                // Current "scroll position" as a continuous value
+                // Each integer = one page spread visible
+                let scrollPage = CGFloat(safeIndex) + clampedDrag
 
                 ZStack {
-                    // Book interior (back cover visible as frame)
+                    // Book interior (back cover)
                     notebook.coverColor
 
                     // Inner edge shadow for depth
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.black.opacity(0.4), lineWidth: 4)
-                        .blur(radius: 4)
+                        .strokeBorder(Color.black.opacity(0.35), lineWidth: 3)
+                        .blur(radius: 3)
                         .padding(3)
 
-                    // Page stack underneath (shows thickness)
-                    ForEach(0..<min(max(pagesAfter, 1), 5), id: \.self) { i in
-                        let stackOffset = CGFloat(min(max(pagesAfter, 1), 5) - i)
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(hex: i % 2 == 0 ? "ECEAE4" : "F0EDE7"))
-                            .padding(pageInset)
-                            .offset(x: stackOffset * 1.0, y: stackOffset * 0.6)
-                            .shadow(color: Color.black.opacity(0.03), radius: 0.5, x: 0.5, y: 0.3)
-                    }
+                    // ── Pages rendered with 3D rotation (papereffect style) ──
+                    // Each page occupies the same frame, rotated around Y-axis at spine
+                    let totalPages = notebook.pages.count
+                    ForEach(0..<totalPages, id: \.self) { i in
+                        // Ratio: how far this page is from current view
+                        // Matches papereffect's getRatio logic
+                        let pageGroup = CGFloat(i - i % 2) * 0.5
+                        let ratio = -0.5 + pageGroup - (scrollPage * 0.5)
 
-                    // Right-side page edges (thickness lines)
-                    let edgeCount = min(pagesAfter, 10)
-                    if edgeCount > 0 {
-                        Canvas { context, size in
-                            for i in 0..<edgeCount {
-                                let x = size.width - CGFloat(edgeCount - i) * 1.2
-                                let shade: Color = i % 2 == 0
-                                    ? Color(hex: "E0DDD7") : Color(hex: "D5D2CC")
-                                context.fill(
-                                    Path(CGRect(x: x, y: 6, width: 0.8, height: size.height - 12)),
-                                    with: .color(shade)
-                                )
-                            }
-                        }
-                        .frame(
-                            width: CGFloat(edgeCount) * 1.2 + 2,
-                            height: bookHeight - pageInset * 2 - 8
-                        )
-                        .offset(x: (bookWidth / 2) - pageInset - 2)
-                        .allowsHitTesting(false)
-                    }
+                        // Clamp with soft falloff (matches papereffect)
+                        let clampedRatio = ratio > 0.5
+                            ? 0.5 + 0.1 * (ratio - 0.5)
+                            : ratio < -0.5
+                                ? -0.5 + 0.1 * (ratio + 0.5)
+                                : ratio
 
-                    // Bottom page edges (thickness lines)
-                    let bottomEdgeCount = min(notebook.pageCount, 10)
-                    if bottomEdgeCount > 0 {
-                        Canvas { context, size in
-                            for i in 0..<bottomEdgeCount {
-                                let y = size.height - CGFloat(bottomEdgeCount - i) * 1.2
-                                let shade: Color = i % 2 == 0
-                                    ? Color(hex: "E0DDD7") : Color(hex: "D5D2CC")
-                                context.fill(
-                                    Path(CGRect(x: 6, y: y, width: size.width - 12, height: 0.8)),
-                                    with: .color(shade)
-                                )
-                            }
-                        }
-                        .frame(
-                            width: bookWidth - pageInset * 2 - 8,
-                            height: CGFloat(bottomEdgeCount) * 1.2 + 2
-                        )
-                        .offset(y: (bookHeight / 2) - pageInset - 2)
-                        .allowsHitTesting(false)
-                    }
+                        let boundedRatio = max(-1, min(1, clampedRatio))
 
-                    // Horizontal binding crease shadow
-                    VStack(spacing: 0) {
-                        Spacer()
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.clear,
-                                        Color.black.opacity(0.06),
-                                        Color.black.opacity(0.14),
-                                        Color.black.opacity(0.06),
-                                        Color.clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
+                        // Angle calculation (matches papereffect's getAngle)
+                        let isRightPage = i % 2 == 0
+                        let baseAngle: Double = isRightPage
+                            ? Double(1 - boundedRatio) * (-Double.pi / 2)  // right page
+                            : Double(1 + boundedRatio) * (Double.pi / 2)   // left page
+                        let angle = baseAngle + Double(i % 2) / 1000  // anti z-fighting
+
+                        // Back-face culling (matches papereffect)
+                        let isCulled = (clampedRatio > 0 && !isRightPage) ||
+                                       (clampedRatio < 0 && isRightPage)
+                        let shouldShow = !isCulled || i == 0
+
+                        // Shadow intensity based on rotation
+                        let rotationProgress = abs(angle) / (Double.pi / 2)
+                        let shadowOpacity = (1.0 - rotationProgress) * 0.45
+
+                        if shouldShow {
+                            let pgText = notebook.pages.indices.contains(i)
+                                ? notebook.pages[i].text : ""
+                            LinedPageView(
+                                pageText: pgText,
+                                pageNumber: i + 1,
+                                totalPages: totalPages,
+                                creationDate: notebook.creationDate,
+                                pageWidth: pageW,
+                                pageHeight: pageH
                             )
-                            .frame(height: 28)
-                        Spacer()
+                            .frame(width: pageW, height: pageH)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            // Dynamic shadow gradient (matches papereffect's updateShadowLayer)
+                            .overlay {
+                                if isRightPage {
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black.opacity(shadowOpacity * 0.9),
+                                            Color.black.opacity(shadowOpacity * 0.4),
+                                            Color.black.opacity(shadowOpacity * 1.0)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                    .allowsHitTesting(false)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                } else {
+                                    LinearGradient(
+                                        colors: [
+                                            Color.black.opacity(shadowOpacity * 0.6),
+                                            Color.black.opacity(shadowOpacity * 0.8),
+                                            Color.black.opacity(shadowOpacity * 1.0),
+                                            Color.black.opacity(shadowOpacity * 1.1)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                    .allowsHitTesting(false)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                            }
+                            // 3D rotation around Y-axis at spine edge
+                            .rotation3DEffect(
+                                .radians(angle),
+                                axis: (x: 0, y: 1, z: 0),
+                                anchor: isRightPage ? .leading : .trailing,
+                                perspective: 0.4
+                            )
+                            // Cover always on top
+                            .zIndex(i == 0 ? 100 : Double(totalPages - i))
+                        }
                     }
-                    .padding(.horizontal, pageInset)
-                    .allowsHitTesting(false)
 
-                    // Current page with drag tilt effect
-                    LinedPageView(
-                        pageText: pageText,
-                        pageNumber: safeIndex + 1,
-                        totalPages: notebook.pages.count,
-                        creationDate: notebook.creationDate,
-                        pageWidth: bookWidth - pageInset * 2,
-                        pageHeight: bookHeight - pageInset * 2
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding(pageInset)
-                    .scaleEffect(1 + abs(dragNorm) * 0.008)
-                    .rotation3DEffect(
-                        .degrees(tiltDeg),
-                        axis: (x: 1, y: 0, z: 0),
-                        anchor: tiltDeg < 0 ? .top : .bottom,
-                        perspective: 0.3
-                    )
-                    .shadow(
-                        color: Color.black.opacity(min(Double(abs(dragNorm)) * 0.1, 0.1)),
-                        radius: 5,
-                        x: 0,
-                        y: tiltDeg < 0 ? -2 : 2
-                    )
+                    // Spine crease shadow (vertical, center)
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    Color.black.opacity(0.08),
+                                    Color.black.opacity(0.16),
+                                    Color.black.opacity(0.08),
+                                    Color.clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: 16)
+                        .allowsHitTesting(false)
                 }
                 .frame(width: bookWidth, height: bookHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -1620,13 +1653,15 @@ struct BookItem: View {
                         .padding(.top, 13)
                     }
                 }
-                // Cover flips upward past vertical — face points toward viewer
+                // Cover flips open around the spine (Y-axis, leading edge)
                 .rotation3DEffect(
-                    .degrees(Double(openProgress) * -300),
-                    axis: (x: 1, y: 0, z: 0),
-                    anchor: .top,
+                    .degrees(Double(openProgress) * -180),
+                    axis: (x: 0, y: 1, z: 0),
+                    anchor: .leading,
                     perspective: 0.4
                 )
+                // Hide cover once past 90° (back face)
+                .opacity(openProgress > 0.5 ? 0 : 1)
         }
         .frame(width: bookWidth, height: bookHeight)
         // Vertical shade along the left edge
@@ -1665,15 +1700,6 @@ struct BookItem: View {
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
         .rotationEffect(.degrees(turnAngle))
-        // Rotate horizontal (90° clockwise) before opening
-        .rotationEffect(.degrees(Double(bookRotation) * 90))
-        // Subtle convex — viewed slightly from above
-        .rotation3DEffect(
-            .degrees(Double(openProgress) * -5),
-            axis: (x: 1, y: 0, z: 0),
-            anchor: .center,
-            perspective: 0.3
-        )
         // Vertical offset
         .offset(y: riseOffset)
         // Jump offset (for open animation)
@@ -1686,7 +1712,7 @@ struct BookItem: View {
         )
         .opacity(dropProgress < 0.01 ? 0 : 1)
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: openProgress)
-        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: bookRotation)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: pageDragOffset)
         .animation(.spring(response: 0.35, dampingFraction: 0.5), value: jump)
         .animation(.spring(response: 0.6, dampingFraction: 0.72), value: turn)
     }
