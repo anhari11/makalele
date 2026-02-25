@@ -82,7 +82,7 @@ struct Notebook: Identifiable {
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "ffdff4"), spineColor: Color(hex: "ffdff4"), pageEdgeColor: Color(hex: "f0d0e4"), hasCoverArt: true, textureURL: "ibiza", creationDate: {
+        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "ffdff4"), spineColor: Color(hex: "c4a0b8"), pageEdgeColor: Color(hex: "f0d0e4"), hasCoverArt: true, textureURL: "ibiza", creationDate: {
             var c = DateComponents(); c.year = 2025; c.month = 3; c.day = 14
             return Calendar.current.date(from: c)!
         }()),
@@ -327,7 +327,7 @@ struct ContentView: View {
                                     Text("Share with friends")
                                         .foregroundStyle(uiColor)
                                         .fontWeight(.bold)
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(size: 30, weight: .bold))
                                     Image(systemName: "chevron.right")
                                         .foregroundStyle(uiColor)
                                         .font(.system(size: 14, weight: .semibold))
@@ -354,14 +354,14 @@ struct ContentView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "person.2.fill")
                                         .foregroundStyle(uiColor)
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(size: 17, weight: .semibold))
                                     Text("Share with friends")
                                         .foregroundStyle(uiColor)
                                         .fontWeight(.bold)
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(size: 17, weight: .bold))
                                     Image(systemName: "chevron.right")
                                         .foregroundStyle(uiColor)
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.system(size: 15, weight: .semibold))
                                 }
                             }
                         }
@@ -370,7 +370,7 @@ struct ContentView: View {
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
                     .zIndex(2)
-                    .padding(.bottom, -16)
+                    .padding(.bottom, isIPad ? 9 : -16)
 
                     // Notebook Carousel
                     BookCarousel(
@@ -479,6 +479,46 @@ struct ContentView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+
+                        // Notch divider line
+                        NotchLine(notchWidth: 40, notchHeight: 20)
+                            .stroke(notebooks[selectedIndex].coverColor.opacity(0.2), lineWidth: 1)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 20)
+                            .padding(.bottom, 8)
+
+                        // Get physical version
+                        HStack {
+                            Button(action: {}) {
+                                HStack(spacing: 10) {
+                                    Text("📦")
+                                        .font(.system(size: 28))
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Get physical version")
+                                            .foregroundStyle(Color.black)
+                                            .fontWeight(.bold)
+                                            .font(.system(size: 15))
+                                        Text("Print your album as a real book")
+                                            .foregroundStyle(Color(hex: "#898988"))
+                                            .font(.system(size: 12))
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#C0C0C0"))
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background(Color(hex: "F5F5F5"))
+                                .cornerRadius(14)
+                            }
+                            .buttonStyle(.plain)
+                        }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 16)
                     }
@@ -990,18 +1030,18 @@ struct BookCarousel: View {
                                     .position(x: shelfGeo.size.width * s.1, y: shelfGeo.size.height * s.2)
                             }
 
-                            // Graffiti tags
-                            let graffiti: [(String, CGFloat, CGFloat, Double, CGFloat)] = [
-                                ("graffiti1", 0.14, 0.38,   6, isIPad ? 80 : 55),
-                                ("graffiti2", 0.75, 0.42, -10, isIPad ? 90 : 60),
-                                ("graffiti3", 0.50, 0.55,   3, isIPad ? 70 : 48),
+                            // Graffiti tags & icon
+                            let graffiti: [(String, CGFloat, CGFloat, Double, CGFloat, Double)] = [
+                                ("graffiti1", 0.14, 0.38,   6, isIPad ? 80 : 55, 0.30),
+                                ("icon", 0.75, 0.42, -10, isIPad ? 90 : 60, 1.0),
+                                ("graffiti3", 0.50, 0.55,   3, isIPad ? 70 : 48, 0.30),
                             ]
                             ForEach(Array(graffiti.enumerated()), id: \.offset) { _, g in
                                 Image(g.0)
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: g.4)
-                                    .opacity(0.30)
+                                    .opacity(g.5)
                                     .rotationEffect(.degrees(g.3))
                                     .rotation3DEffect(.degrees(flatTilt), axis: (x: 1, y: 0, z: 0), perspective: flatPersp)
                                     .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: 1)
