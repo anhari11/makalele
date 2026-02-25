@@ -115,7 +115,7 @@ struct ContentView: View {
     @State private var cursorTimer: Timer? = nil
     @State private var entranceSlide: CGFloat = 1500
     @State private var hasAppeared: Bool = false
-    @FocusState private var isTitleFieldFocused: Bool
+@FocusState private var isTitleFieldFocused: Bool
 
     private func formattedCreationDate(for date: Date) -> String {
         let formatter = DateFormatter()
@@ -170,47 +170,8 @@ struct ContentView: View {
 
                 VStack(spacing: 0) {
 
-                    // Top navigation bar
-                    HStack {
-                        Spacer()
+                    Spacer().frame(height: geometry.safeAreaInsets.top + 4)
 
-                      //  HStack {
-                        //    Text("Private")
-                          //      .fontWeight(.bold)
-                            //    .foregroundStyle(uiColor)
-                            //Image(systemName: "chevron.down")
-                              //  .foregroundColor(uiColor)
-                                //.fontWeight(.semibold)
-                        //}
-                        //.padding(.vertical, 5)
-                        //.padding(.horizontal, 20)
-                        //.background(uiBgColor)
-
-                        //HStack(spacing: 3) {
-                          //  Image("profile")
-                            //    .resizable()
-                              //  .scaledToFill()
-                                //.frame(width: 19, height: 19)
-                                //.clipShape(Circle())
-                                //.opacity(1 - Double(openBookProgress) * 0.5)
-
-                            //Text("aanhari")
-                              //  .foregroundStyle(Color.black)
-                                //.fontWeight(.bold)
-                            
-
-                            //Image(systemName: "chevron.right")
-                              //  .font(.system(size: 15, weight: .medium))
-                                //.foregroundColor(Color(hex: "#898988"))
-                                //.fontWeight(.bold)
-                        //}
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 10)
-                    
                     ZStack  {
                         // Centered: title + ellipsis
                         HStack(spacing: 3) {
@@ -229,11 +190,11 @@ struct ContentView: View {
                                 if isNamingNewBook && newBookTitle.isEmpty {
                                     HStack(spacing: 0) {
                                         Text("Untitled")
-                                            .font(.system(size: 22, weight: .bold))
+                                            .font(.system(size: 16, weight: .bold))
                                             .foregroundColor(.gray.opacity(0.5))
                                         Rectangle()
                                             .fill(Color.black)
-                                            .frame(width: 2, height: 20)
+                                            .frame(width: 2, height: 16)
                                             .opacity(cursorVisible ? 1 : 0)
                                     }
                                     .allowsHitTesting(false)
@@ -241,27 +202,26 @@ struct ContentView: View {
 
                                 if !isNamingNewBook {
                                     Text(notebooks[selectedIndex].title)
-                                        .font(.system(size: 22, weight: .bold))
+                                        .font(.system(size: 16, weight: .bold))
                                         .foregroundColor(.black)
                                 }
                             }
-                            .padding(.vertical, 9)
-                            .padding(.horizontal, 18)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 14)
                             .background(Color(hex: "EFEFEF"))
                             .fixedSize()
                             Button(action: {}) {
-                                HStack(spacing: 0) {   // 👈 control
+                                HStack(spacing: 0) {
                                     Image(systemName: "chevron.down")
                                         .foregroundStyle(Color.white)
                                         .fontWeight(.bold)
-                                        .font(.system(size: 23, weight: .bold))
-                                        
+                                        .font(.system(size: 16, weight: .bold))
                                 }
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 13.5)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 11)
                             .background(Color(hex: "#0e89fc"))
-                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 8, topTrailingRadius: 8))
+                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
                         }
                         .scaleEffect(isNamingNewBook ? 1.25 : 1.0)
                         .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isNamingNewBook)
@@ -297,7 +257,13 @@ struct ContentView: View {
                     .padding(.horizontal, 16)
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 10)
+
+                    // Divider below title
+                    Rectangle()
+                        .fill(Color(hex: "E0E0E0"))
+                        .frame(height: 0.5)
+                        .padding(.bottom, 16)
 
                     // Aanhari x and Share with friends
                     Group {
@@ -548,19 +514,13 @@ struct ContentView: View {
                         .buttonStyle(.plain)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 16)
-
-                        // Notch divider line
-                        NotchLine(notchWidth: 40, notchHeight: 20)
-                            .stroke(notebooks[selectedIndex].coverColor.opacity(0.2), lineWidth: 1)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 20)
-                            .padding(.bottom, 16)
                     }
                 }
                 .scaleEffect(isNamingNewBook ? 1.15 : 1.0, anchor: UnitPoint(x: 0.5, y: 0.13))
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isNamingNewBook)
                 .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                 .allowsHitTesting(openBookIndex == nil)
+                .ignoresSafeArea(.container, edges: .top)
 
                 // Tap to close / drag to turn pages
                 if let openIndex = openBookIndex {
@@ -623,16 +583,6 @@ struct ContentView: View {
                         .zIndex(4)
                 }
 
-                // Bottom bar with white triangle notch
-                VStack(spacing: 0) {
-                    Spacer()
-                    NotchLine(notchWidth: 40, notchHeight: 20)
-                        .stroke(notebooks[selectedIndex].coverColor.opacity(0.2), lineWidth: 1)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: geometry.size.height * 0.056)
-                }
-                .edgesIgnoringSafeArea(.bottom)
-                .zIndex(10)
             }
         }
         .ignoresSafeArea(.keyboard)
@@ -1122,6 +1072,57 @@ struct BookCarousel: View {
                 .shadow(color: Color.black.opacity(0.10), radius: 8, x: 0, y: 4)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
+            .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
+            .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
+
+            // Buttons below shelf
+            VStack(spacing: 0) {
+                HStack(spacing: 18) {
+                    // Undo button
+                    Circle()
+                        .fill(Color(hex: "EFEFEF"))
+                        .frame(width: 38, height: 38)
+                        .overlay(Text("🔄").font(.system(size: 16)))
+
+                    // Confirm button (larger)
+                    Circle()
+                        .fill(Color(hex: "EFEFEF"))
+                        .frame(width: 50, height: 50)
+                        .overlay(Text("🤞").font(.system(size: 22)))
+
+                    // Close button
+                    Circle()
+                        .fill(Color(hex: "EFEFEF"))
+                        .frame(width: 38, height: 38)
+                        .overlay(Text("🗑️").font(.system(size: 16)))
+                }
+
+                // Divider
+                Rectangle()
+                    .fill(Color(hex: "E0E0E0"))
+                    .frame(height: 1)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 16)
+
+                // Get printed book button
+                Button {
+                } label: {
+                    HStack(spacing: 10) {
+                        Image("bag")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
+                        Text("Get printed book")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(Color(hex: "555555"))
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                }
+                .padding(.top, 12)
+            }
+            .position(x: geometry.size.width / 2, y: geometry.size.height + 6)
             .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
