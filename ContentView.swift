@@ -1504,25 +1504,17 @@ struct BookItem: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // ── Open book view (3D page spread) ──
+            // ── Open book view (Paper-style 3D page spread) ──
             if isOpening || openProgress > 0 {
                 let pageInset: CGFloat = 10
-                let safeIndex = min(currentPage, max(notebook.pages.count - 1, 0))
-                let pageText = notebook.pages.indices.contains(safeIndex) ? notebook.pages[safeIndex].text : ""
-
                 let halfW = (bookWidth - pageInset * 2) / 2
                 let pageH = bookHeight - pageInset * 2
                 let totalPages = notebook.pages.count
+                let fullFlip = bookWidth * 0.4
 
-                // Turn progress: 0..1 mapped from drag
-                let forwardDrag = max(0, min(1, -pageDragOffset / (bookWidth * 0.4)))
-                let backwardDrag = max(0, min(1, pageDragOffset / (bookWidth * 0.4)))
-
-                // Page indices for the two-page spread
-                // Left page = currentPage (already read), Right page = currentPage + 1
-                // First spread: left=blank, right=page 0
-                let leftIdx = safeIndex - 1
-                let rightIdx = safeIndex
+                // Continuous scroll position: currentPage + fractional drag
+                let dragFraction = -pageDragOffset / fullFlip
+                let scrollPos = CGFloat(currentPage) + dragFraction
 
                 ZStack {
                     // Book interior (back cover)
@@ -1533,177 +1525,78 @@ struct BookItem: View {
                         .padding(3)
 
                     // ═══════════════════════════════════
-                    // LEFT HALF — static left page
-                    // During backward drag, show the page UNDER the one being flipped back
+                    // Paper-style: render ALL pages with ratio-based 3D transforms
+                    // Each page is a leaf that rotates around the spine.
+                    // ratio < 0 → page on right (unturned), ratio > 0 → page on left (turned)
                     // ═══════════════════════════════════
-                    HStack(spacing: 0) {
-                        Group {
-                            let showLeftIdx = backwardDrag > 0.05 ? leftIdx - 1 : leftIdx
-                            if showLeftIdx >= 0 && showLeftIdx < totalPages {
-                                let txt = notebook.pages[showLeftIdx].text
-                                LinedPageView(
-                                    pageText: txt,
-                                    pageNumber: showLeftIdx + 1,
-                                    totalPages: totalPages,
-                                    creationDate: notebook.creationDate,
-                                    pageWidth: halfW,
-                                    pageHeight: pageH
-                                )
-                            } else {
-                                // Inside front cover
-                                ZStack {
-                                    Color(hex: "F5F2EC")
-                                    Text(notebook.title)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundStyle(Color.black.opacity(0.25))
-                                }
+                    ForEach(0..<totalPages, id: \.self) { i in
+                        // Ratio: how far this page has been turned
+                        // scrollPos=0 → page 0 is current right page
+                        // scrollPos=1 → page 0 is turned left, page 1 is current right
+                        let rawRatio = scrollPos - CGFloat(i)
+
+                        // Clamp with slight overlap separation (Paper-style)
+                        let ratio: CGFloat = {
+                            var r = rawRatio
+                            if r > 0.5 {
+                                r = 0.5 + 0.1 * (r - 0.5)
+                            } else if r < -0.5 {
+                                r = -0.5 + 0.1 * (r + 0.5)
                             }
-                        }
-                        .frame(width: halfW, height: pageH)
-                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 6, bottomTrailingRadius: 0, topTrailingRadius: 0))
-                        // Spine shadow on left page
-                        .overlay(alignment: .trailing) {
-                            LinearGradient(
-                                colors: [Color.clear, Color.black.opacity(0.08), Color.black.opacity(0.18)],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                            .frame(width: 15)
-                        }
+                            return max(-1, min(1, r))
+                        }()
 
-                        Spacer(minLength: 0)
-                    }
-                    .padding(pageInset)
+                        // Skip pages too far away (optimization)
+                        let visible = ratio > -1.0 && ratio < 1.0
 
-                    // ═══════════════════════════════════
-                    // RIGHT HALF — static right page (or next page revealed during flip)
-                    // ═══════════════════════════════════
-                    HStack(spacing: 0) {
-                        Spacer(minLength: 0)
+                        if visible {
+                            // Angle: ratio -1 → 0° (flat right), 0 → -90° (perpendicular), 1 → -180° (flat left)
+                            let angle = Double(1 + ratio) * -90.0
 
-                        Group {
-                            if forwardDrag > 0.05 && rightIdx + 1 < totalPages {
-                                // During forward flip: show NEXT page underneath
-                                let txt = notebook.pages[rightIdx + 1].text
-                                LinedPageView(
-                                    pageText: txt,
-                                    pageNumber: rightIdx + 2,
-                                    totalPages: totalPages,
-                                    creationDate: notebook.creationDate,
-                                    pageWidth: halfW,
-                                    pageHeight: pageH
-                                )
-                            } else if rightIdx >= 0 && rightIdx < totalPages {
-                                // Normal: show current right page
+                            // Shadow darkens as page approaches perpendicular
+                            let shadowA = sin(abs(Double(ratio)) * .pi) * 0.3
+
+                            // Z-ordering: actively flipping page on top, then by proximity to center
+                            let zOrder: Double = 100.0 - abs(Double(ratio)) * 100.0
+
+                            let pageText = notebook.pages[i].text
+
+                            HStack(spacing: 0) {
+                                Spacer(minLength: 0)
+
                                 LinedPageView(
                                     pageText: pageText,
-                                    pageNumber: rightIdx + 1,
+                                    pageNumber: i + 1,
                                     totalPages: totalPages,
                                     creationDate: notebook.creationDate,
                                     pageWidth: halfW,
                                     pageHeight: pageH
                                 )
-                            } else {
-                                Color(hex: "F5F2EC")
-                            }
-                        }
-                        .frame(width: halfW, height: pageH)
-                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
-                        // Spine shadow on right page
-                        .overlay(alignment: .leading) {
-                            LinearGradient(
-                                colors: [Color.black.opacity(0.18), Color.black.opacity(0.08), Color.clear],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                            .frame(width: 15)
-                        }
-                    }
-                    .padding(pageInset)
-
-                    // ═══════════════════════════════════
-                    // TURNING PAGE — 3D flip around center spine
-                    // ═══════════════════════════════════
-
-                    // Forward flip: right page turns left around spine
-                    if forwardDrag > 0.01 && rightIdx < totalPages {
-                        let flipDeg = Double(forwardDrag) * -180
-                        let shadowA = sin(Double(forwardDrag) * .pi) * 0.45
-
-                        HStack(spacing: 0) {
-                            Spacer(minLength: 0)
-
-                            LinedPageView(
-                                pageText: pageText,
-                                pageNumber: rightIdx + 1,
-                                totalPages: totalPages,
-                                creationDate: notebook.creationDate,
-                                pageWidth: halfW,
-                                pageHeight: pageH
-                            )
-                            .frame(width: halfW, height: pageH)
-                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
-                            .overlay {
-                                Color.black.opacity(shadowA)
-                                    .allowsHitTesting(false)
-                            }
-                            .rotation3DEffect(
-                                .degrees(flipDeg),
-                                axis: (x: 0, y: 1, z: 0),
-                                anchor: .leading,  // spine is at leading edge of right page
-                                perspective: 0.5
-                            )
-                        }
-                        .padding(pageInset)
-                        .zIndex(3)
-                    }
-
-                    // Backward flip: previous page flips from left back to right around spine
-                    if backwardDrag > 0.01 && leftIdx >= 0 && leftIdx < totalPages {
-                        // At rest (backwardDrag=0): page is flat on left (-180° from right perspective)
-                        // At full drag (backwardDrag=1): page is back flat on right (0°)
-                        let flipDeg = Double(1.0 - backwardDrag) * 180
-                        let shadowA = sin(Double(backwardDrag) * .pi) * 0.45
-                        let txt = notebook.pages[leftIdx].text
-
-                        HStack(spacing: 0) {
-                            LinedPageView(
-                                pageText: txt,
-                                pageNumber: leftIdx + 1,
-                                totalPages: totalPages,
-                                creationDate: notebook.creationDate,
-                                pageWidth: halfW,
-                                pageHeight: pageH
-                            )
-                            .frame(width: halfW, height: pageH)
-                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 6, bottomTrailingRadius: 0, topTrailingRadius: 0))
-                            .overlay {
-                                Color.black.opacity(shadowA)
-                                    .allowsHitTesting(false)
-                            }
-                            .rotation3DEffect(
-                                .degrees(flipDeg),
-                                axis: (x: 0, y: 1, z: 0),
-                                anchor: .trailing,  // spine is at trailing edge of left page
-                                perspective: 0.5
-                            )
-
-                            Spacer(minLength: 0)
-                        }
-                        .padding(pageInset)
-                        .zIndex(3)
-                    }
-
-                    // Drop shadow on the page underneath during flip
-                    if forwardDrag > 0.01 || backwardDrag > 0.01 {
-                        HStack(spacing: 0) {
-                            if forwardDrag > 0 { Spacer(minLength: 0) }
-                            Color.black
-                                .opacity(Double(sin(Double(max(forwardDrag, backwardDrag)) * .pi)) * 0.12)
                                 .frame(width: halfW, height: pageH)
-                            if backwardDrag > 0 { Spacer(minLength: 0) }
+                                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
+                                // Spine shadow gradient on page
+                                .overlay(alignment: .leading) {
+                                    LinearGradient(
+                                        colors: [Color.black.opacity(0.15), Color.black.opacity(0.05), Color.clear],
+                                        startPoint: .leading, endPoint: .trailing
+                                    )
+                                    .frame(width: 12)
+                                }
+                                // Dynamic shadow during flip
+                                .overlay {
+                                    Color.black.opacity(shadowA)
+                                        .allowsHitTesting(false)
+                                }
+                                .rotation3DEffect(
+                                    .degrees(angle),
+                                    axis: (x: 0, y: 1, z: 0),
+                                    anchor: .leading,
+                                    perspective: 0.001
+                                )
+                            }
+                            .padding(pageInset)
+                            .zIndex(zOrder)
                         }
-                        .padding(pageInset)
-                        .zIndex(2)
-                        .allowsHitTesting(false)
                     }
 
                     // Spine crease shadow
@@ -1721,7 +1614,7 @@ struct BookItem: View {
                             )
                         )
                         .frame(width: 14)
-                        .zIndex(4)
+                        .zIndex(200)
                         .allowsHitTesting(false)
                 }
                 .frame(width: bookWidth, height: bookHeight)
