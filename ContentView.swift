@@ -1529,7 +1529,7 @@ struct BookItem: View {
                 let pageInset: CGFloat = 10
                 let pageW = openBookW - pageInset * 2
                 let halfBookH = openBookH / 2
-                let spineGap: CGFloat = 8
+                let spineGap: CGFloat = 2
                 let halfH = halfBookH - pageInset - spineGap
                 let totalPages = notebook.pages.count
                 let fullFlip = openBookH * 0.4
@@ -1638,12 +1638,12 @@ struct BookItem: View {
                             .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
                     )
                     .rotation3DEffect(
-                        .degrees(-14),
+                        .degrees(-10),
                         axis: (x: 1, y: 0, z: 0),
                         anchor: .top,
-                        perspective: 0.45
+                        perspective: 0.35
                     )
-                    .offset(y: -halfBookH / 2)
+                    .offset(y: -halfBookH / 2 + 20)
 
                     // ── BOTTOM PANEL (unturned pages) ──
                     ZStack {
@@ -1744,44 +1744,15 @@ struct BookItem: View {
                             .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
                     )
                     .rotation3DEffect(
-                        .degrees(14),
+                        .degrees(10),
                         axis: (x: 1, y: 0, z: 0),
                         anchor: .bottom,
-                        perspective: 0.45
+                        perspective: 0.35
                     )
-                    .offset(y: halfBookH / 2)
-
-                    // ── Spine crease overlay (between panels) ──
-                    VStack(spacing: 0) {
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.clear, location: 0),
-                                .init(color: Color.black.opacity(0.05), location: 0.3),
-                                .init(color: Color.black.opacity(0.18), location: 1.0),
-                            ],
-                            startPoint: .top, endPoint: .bottom
-                        )
-                        .frame(height: 14)
-
-                        Rectangle()
-                            .fill(Color.black.opacity(0.22))
-                            .frame(height: 2)
-
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.black.opacity(0.18), location: 0),
-                                .init(color: Color.black.opacity(0.05), location: 0.7),
-                                .init(color: Color.clear, location: 1.0),
-                            ],
-                            startPoint: .top, endPoint: .bottom
-                        )
-                        .frame(height: 14)
-                    }
-                    .frame(width: openBookW)
-                    .zIndex(200)
-                    .allowsHitTesting(false)
+                    .offset(y: halfBookH / 2 - 20)
                 }
                 .frame(width: openBookW, height: openBookH)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
                 .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
                 .offset(y: -(bookHeight - openBookH) / 2)
                 .opacity(min(1, Double(openProgress) * 2.5))
