@@ -1528,7 +1528,9 @@ struct BookItem: View {
                 let openBookH = openBookW * 1.25
                 let pageInset: CGFloat = 10
                 let pageW = openBookW - pageInset * 2
-                let halfH = (openBookH - pageInset * 2) / 2
+                let halfBookH = openBookH / 2
+                let spineGap: CGFloat = 8
+                let halfH = halfBookH - pageInset - spineGap
                 let totalPages = notebook.pages.count
                 let fullFlip = openBookH * 0.4
 
@@ -1537,45 +1539,142 @@ struct BookItem: View {
                 let scrollPos = CGFloat(currentPage) + dragFraction
 
                 ZStack {
-                    // Book interior (back cover)
-                    notebook.coverColor
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.black.opacity(0.3), lineWidth: 3)
-                        .blur(radius: 3)
-                        .padding(3)
+                    // ── TOP PANEL (turned pages) ──
+                    ZStack {
+                        // Back cover
+                        notebook.coverColor
+                        UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 8)
+                            .strokeBorder(Color.black.opacity(0.3), lineWidth: 3)
+                            .blur(radius: 3)
+                            .padding(3)
 
-                    // Concave depth shading on back cover
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.black.opacity(0.14), location: 0),
-                            .init(color: Color.clear, location: 0.28),
-                            .init(color: Color.clear, location: 0.72),
-                            .init(color: Color.black.opacity(0.14), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                        // Depth shading for top half
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.black.opacity(0.18), location: 0),
+                                .init(color: Color.black.opacity(0.04), location: 0.3),
+                                .init(color: Color.clear, location: 0.55),
+                                .init(color: Color.black.opacity(0.15), location: 1.0),
+                            ],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                        .allowsHitTesting(false)
+
+                        // Top (turned) pages
+                        ForEach(0..<totalPages, id: \.self) { i in
+                            let diff = scrollPos - CGFloat(i)
+                            if diff > -5 && diff < 6 && diff > 0.5 {
+                                let pageText = notebook.pages[i].text
+                                let angle: Double = {
+                                    if diff < 1.0 {
+                                        return -(1.0 - Double(diff)) * 180.0
+                                    } else {
+                                        return Double(min(diff - 1.0, 4)) * 2.5
+                                    }
+                                }()
+                                let zOrder: Double = diff < 1.0 ? 100 : 50.0 - Double(diff - 1.0) * 10
+                                let shadowA: Double = diff < 1.0 ? sin(Double(diff) * .pi) * 0.25 : 0
+
+                                VStack(spacing: 0) {
+                                    LinedPageView(
+                                        pageText: pageText,
+                                        pageNumber: i + 1,
+                                        totalPages: totalPages,
+                                        creationDate: notebook.creationDate,
+                                        pageWidth: pageW,
+                                        pageHeight: halfH
+                                    )
+                                    .frame(width: pageW, height: halfH)
+                                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 6))
+                                    .overlay(alignment: .bottom) {
+                                        LinearGradient(
+                                            stops: [
+                                                .init(color: Color.black.opacity(0.22), location: 0),
+                                                .init(color: Color.black.opacity(0.12), location: 0.2),
+                                                .init(color: Color.black.opacity(0.04), location: 0.5),
+                                                .init(color: Color.clear, location: 1.0),
+                                            ],
+                                            startPoint: .bottom, endPoint: .top
+                                        )
+                                        .frame(height: 35)
+                                    }
+                                    .overlay {
+                                        Color.black.opacity(shadowA)
+                                            .allowsHitTesting(false)
+                                    }
+                                    .rotation3DEffect(
+                                        .degrees(angle),
+                                        axis: (x: 1, y: 0, z: 0),
+                                        anchor: .bottom,
+                                        perspective: 0.5
+                                    )
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.horizontal, pageInset)
+                                .padding(.top, pageInset)
+                                .zIndex(zOrder)
+                            }
+                        }
+
+                        // Left spine binding
+                        HStack(spacing: 0) {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.black.opacity(0.35), location: 0),
+                                    .init(color: Color.black.opacity(0.15), location: 0.3),
+                                    .init(color: Color.clear, location: 1.0),
+                                ],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                            .frame(width: 18)
+                            Spacer()
+                        }
+                        .allowsHitTesting(false)
+                    }
+                    .frame(width: openBookW, height: halfBookH)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 10))
+                    .overlay(
+                        UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 10)
+                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
                     )
-                    .allowsHitTesting(false)
+                    .rotation3DEffect(
+                        .degrees(-14),
+                        axis: (x: 1, y: 0, z: 0),
+                        anchor: .top,
+                        perspective: 0.45
+                    )
+                    .offset(y: -halfBookH / 2)
 
-                    // ═══════════════════════════════════
-                    // Paper-style: pages flip up/down around horizontal spine
-                    // diff <= 0.5 → bottom (unturned / first half of flip)
-                    // diff > 0.5  → top (turned / second half of flip)
-                    // ═══════════════════════════════════
-                    ForEach(0..<totalPages, id: \.self) { i in
-                        let diff = scrollPos - CGFloat(i)
+                    // ── BOTTOM PANEL (unturned pages) ──
+                    ZStack {
+                        // Back cover
+                        notebook.coverColor
+                        UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 8, bottomTrailingRadius: 8, topTrailingRadius: 0)
+                            .strokeBorder(Color.black.opacity(0.3), lineWidth: 3)
+                            .blur(radius: 3)
+                            .padding(3)
 
-                        if diff > -5 && diff < 6 {
-                            let pageText = notebook.pages[i].text
+                        // Depth shading for bottom half
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.black.opacity(0.15), location: 0),
+                                .init(color: Color.clear, location: 0.45),
+                                .init(color: Color.black.opacity(0.04), location: 0.7),
+                                .init(color: Color.black.opacity(0.18), location: 1.0),
+                            ],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                        .allowsHitTesting(false)
 
-                            if diff <= 0.5 {
-                                // ── BOTTOM PAGE (unturned) ──
+                        // Bottom (unturned) pages
+                        ForEach(0..<totalPages, id: \.self) { i in
+                            let diff = scrollPos - CGFloat(i)
+                            if diff > -5 && diff < 6 && diff <= 0.5 {
+                                let pageText = notebook.pages[i].text
                                 let angle: Double = {
                                     if diff >= 0 {
-                                        // Actively flipping upward: 0° → 90°
                                         return Double(diff) * 180.0
                                     } else {
-                                        // Stacked behind current: gentle fan
                                         return -Double(min(-diff, 4)) * 2.5
                                     }
                                 }()
@@ -1596,10 +1695,15 @@ struct BookItem: View {
                                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 6, bottomTrailingRadius: 6, topTrailingRadius: 0))
                                     .overlay(alignment: .top) {
                                         LinearGradient(
-                                            colors: [Color.black.opacity(0.15), Color.black.opacity(0.05), Color.clear],
+                                            stops: [
+                                                .init(color: Color.black.opacity(0.22), location: 0),
+                                                .init(color: Color.black.opacity(0.12), location: 0.2),
+                                                .init(color: Color.black.opacity(0.04), location: 0.5),
+                                                .init(color: Color.clear, location: 1.0),
+                                            ],
                                             startPoint: .top, endPoint: .bottom
                                         )
-                                        .frame(height: 12)
+                                        .frame(height: 35)
                                     }
                                     .overlay {
                                         Color.black.opacity(shadowA)
@@ -1612,97 +1716,72 @@ struct BookItem: View {
                                         perspective: 0.5
                                     )
                                 }
-                                .padding(pageInset)
-                                // Concave curve: bottom half tilts away at bottom edge
-                                .rotation3DEffect(
-                                    .degrees(-8),
-                                    axis: (x: 1, y: 0, z: 0),
-                                    anchor: .center,
-                                    perspective: 0.35
-                                )
-                                .zIndex(zOrder)
-
-                            } else {
-                                // ── TOP PAGE (turned) ──
-                                let angle: Double = {
-                                    if diff < 1.0 {
-                                        // Actively flipping (landing on top): -90° → 0°
-                                        return -(1.0 - Double(diff)) * 180.0
-                                    } else {
-                                        // Stacked on top: gentle fan
-                                        return Double(min(diff - 1.0, 4)) * 2.5
-                                    }
-                                }()
-                                let zOrder: Double = diff < 1.0 ? 100 : 50.0 - Double(diff - 1.0) * 10
-                                let shadowA: Double = diff < 1.0 ? sin(Double(diff) * .pi) * 0.25 : 0
-
-                                VStack(spacing: 0) {
-                                    LinedPageView(
-                                        pageText: pageText,
-                                        pageNumber: i + 1,
-                                        totalPages: totalPages,
-                                        creationDate: notebook.creationDate,
-                                        pageWidth: pageW,
-                                        pageHeight: halfH
-                                    )
-                                    .frame(width: pageW, height: halfH)
-                                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 6))
-                                    .overlay(alignment: .bottom) {
-                                        LinearGradient(
-                                            colors: [Color.black.opacity(0.15), Color.black.opacity(0.05), Color.clear],
-                                            startPoint: .bottom, endPoint: .top
-                                        )
-                                        .frame(height: 12)
-                                    }
-                                    .overlay {
-                                        Color.black.opacity(shadowA)
-                                            .allowsHitTesting(false)
-                                    }
-                                    .rotation3DEffect(
-                                        .degrees(angle),
-                                        axis: (x: 1, y: 0, z: 0),
-                                        anchor: .bottom,
-                                        perspective: 0.5
-                                    )
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(pageInset)
-                                // Concave curve: top half tilts away at top edge
-                                .rotation3DEffect(
-                                    .degrees(8),
-                                    axis: (x: 1, y: 0, z: 0),
-                                    anchor: .center,
-                                    perspective: 0.35
-                                )
+                                .padding(.horizontal, pageInset)
+                                .padding(.bottom, pageInset)
                                 .zIndex(zOrder)
                             }
                         }
-                    }
 
-                    // Spine crease shadow (horizontal)
-                    Rectangle()
-                        .fill(
+                        // Left spine binding
+                        HStack(spacing: 0) {
                             LinearGradient(
-                                colors: [
-                                    Color.clear,
-                                    Color.black.opacity(0.06),
-                                    Color.black.opacity(0.15),
-                                    Color.black.opacity(0.06),
-                                    Color.clear
+                                stops: [
+                                    .init(color: Color.black.opacity(0.35), location: 0),
+                                    .init(color: Color.black.opacity(0.15), location: 0.3),
+                                    .init(color: Color.clear, location: 1.0),
                                 ],
-                                startPoint: .top, endPoint: .bottom
+                                startPoint: .leading, endPoint: .trailing
                             )
+                            .frame(width: 18)
+                            Spacer()
+                        }
+                        .allowsHitTesting(false)
+                    }
+                    .frame(width: openBookW, height: halfBookH)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 10, bottomTrailingRadius: 10, topTrailingRadius: 0))
+                    .overlay(
+                        UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 10, bottomTrailingRadius: 10, topTrailingRadius: 0)
+                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
+                    )
+                    .rotation3DEffect(
+                        .degrees(14),
+                        axis: (x: 1, y: 0, z: 0),
+                        anchor: .bottom,
+                        perspective: 0.45
+                    )
+                    .offset(y: halfBookH / 2)
+
+                    // ── Spine crease overlay (between panels) ──
+                    VStack(spacing: 0) {
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.clear, location: 0),
+                                .init(color: Color.black.opacity(0.05), location: 0.3),
+                                .init(color: Color.black.opacity(0.18), location: 1.0),
+                            ],
+                            startPoint: .top, endPoint: .bottom
                         )
                         .frame(height: 14)
-                        .zIndex(200)
-                        .allowsHitTesting(false)
+
+                        Rectangle()
+                            .fill(Color.black.opacity(0.22))
+                            .frame(height: 2)
+
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.black.opacity(0.18), location: 0),
+                                .init(color: Color.black.opacity(0.05), location: 0.7),
+                                .init(color: Color.clear, location: 1.0),
+                            ],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                        .frame(height: 14)
+                    }
+                    .frame(width: openBookW)
+                    .zIndex(200)
+                    .allowsHitTesting(false)
                 }
                 .frame(width: openBookW, height: openBookH)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
-                )
                 .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
                 .offset(y: -(bookHeight - openBookH) / 2)
                 .opacity(min(1, Double(openProgress) * 2.5))
