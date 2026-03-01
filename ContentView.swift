@@ -116,6 +116,7 @@ struct ContentView: View {
     @State private var entranceSlide: CGFloat = 1500
     @State private var hasAppeared: Bool = false
     @State private var shimmerPhase: CGFloat = -1
+    @State private var aboveCarouselHeight: CGFloat = 0
 @FocusState private var isTitleFieldFocused: Bool
 
     private func formattedCreationDate(for date: Date) -> String {
@@ -161,15 +162,13 @@ struct ContentView: View {
                         }
                     }
 
-                // Background overlay: book color when opening
-                if let openIndex = openBookIndex {
-                    notebooks[openIndex].coverColor
-                        .opacity(Double(openBookProgress))
-                        .ignoresSafeArea()
-                        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
-                }
+                // Background stays white when opening
 
                 VStack(spacing: 0) {
+                    let dismissProgress = min(1, CGFloat(openBookProgress) * 2.5)
+
+                    // ── Above-carousel elements (slide UP when opening) ──
+                    VStack(spacing: 0) {
 
                     Spacer().frame(height: geometry.safeAreaInsets.top + 4)
 
@@ -361,28 +360,47 @@ struct ContentView: View {
                     .animation(.smooth(duration: 0.15), value: dragOffset)
                     .zIndex(2)
                     .padding(.bottom, isIPad ? 9 : -16)
+                    }
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.onAppear { aboveCarouselHeight = proxy.size.height }
+                        }
+                    )
+                    .offset(y: -geometry.size.height * 0.5 * dismissProgress)
+                    .opacity(Double(1 - dismissProgress))
+                    .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
                     // Notebook Carousel
                     BookCarousel(
-                        notebooks: notebooks,
-                        selectedIndex: $selectedIndex,
-                        dragOffset: $dragOffset,
-                        screenWidth: min(geometry.size.width, geometry.size.height),
-                        openBookIndex: openBookIndex,
-                        openBookProgress: openBookProgress,
-                        bookJump: bookJump,
-                        bookTurn: bookTurn,
-                        onBookTap: { index in
-                            handleBookTap(index: index)
-                        },
-                        currentPage: $currentPage,
-                        pageDragOffset: pageDragOffset,
-                        bookRotation: bookRotation,
-                        newBookDrop: newBookDrop,
-                        droppingBookIndex: droppingBookIndex,
-                        entranceSlide: entranceSlide
-                    )
+                            notebooks: notebooks,
+                            selectedIndex: $selectedIndex,
+                            dragOffset: $dragOffset,
+                            screenWidth: min(geometry.size.width, geometry.size.height),
+                            openBookIndex: openBookIndex,
+                            openBookProgress: openBookProgress,
+                            bookJump: bookJump,
+                            bookTurn: bookTurn,
+                            onBookTap: { index in
+                                handleBookTap(index: index)
+                            },
+                            currentPage: $currentPage,
+                            pageDragOffset: pageDragOffset,
+                            bookRotation: bookRotation,
+                            newBookDrop: newBookDrop,
+                            droppingBookIndex: droppingBookIndex,
+                            entranceSlide: entranceSlide
+                        )
                     .frame(height: isIPad ? 575 : 450)
+                    .offset(y: {
+                        guard openBookIndex != nil else { return CGFloat(0) }
+                        let carouselH: CGFloat = isIPad ? 575 : 450
+                        let carouselTopInContent = aboveCarouselHeight - geometry.safeAreaInsets.top
+                        let carouselCenterInContent = carouselTopInContent + carouselH / 2
+                        let screenCenter = geometry.size.height / 2
+                        let offset = screenCenter - carouselCenterInContent
+                        return offset * min(1, CGFloat(openBookProgress) * 2)
+                    }())
+                    .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                     .onAppear {
                         if !hasAppeared {
                             hasAppeared = true
@@ -517,7 +535,6 @@ struct ContentView: View {
                 }
                 .scaleEffect(isNamingNewBook ? 1.15 : 1.0, anchor: UnitPoint(x: 0.5, y: 0.13))
                 .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isNamingNewBook)
-                .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                 .allowsHitTesting(openBookIndex == nil)
                 .ignoresSafeArea(.container, edges: .top)
 
@@ -648,10 +665,12 @@ struct ContentView: View {
                     .padding(.bottom, 8)
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
-               
+                .offset(y: geometry.size.height * 0.5 * min(1, CGFloat(openBookProgress) * 2.5))
+                .opacity(Double(1 - min(1, CGFloat(openBookProgress) * 2.5)))
+                .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
             }
-        }
+            }
         .ignoresSafeArea(.keyboard)
         #if canImport(UIKit)
         .background(TextInputWarmer().frame(width: 0, height: 0))
@@ -678,9 +697,16 @@ struct ContentView: View {
         bookRotation = 0
         currentPage = 0
 
-        // Cover flips open around the spine (Y-axis)
-        withAnimation(.spring(response: 0.65, dampingFraction: 0.75)) {
-            openBookProgress = 1
+        // Phase 1: Tilt book forward to lay flat
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.88)) {
+            openBookProgress = 0.5
+        }
+
+        // Phase 2: Open the cover/lid to reveal pages
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            withAnimation(.spring(response: 0.65, dampingFraction: 0.82)) {
+                openBookProgress = 1
+            }
         }
     }
 
@@ -691,12 +717,18 @@ struct ContentView: View {
 
     private func performCoverCloseAnimation() {
         pageDragOffset = 0
-        // Cover folds shut along the spine
-        withAnimation(.spring(response: 0.55, dampingFraction: 0.80)) {
-            openBookProgress = 0
+        // Phase 1: Close the lid
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            openBookProgress = 0.5
+        }
+        // Phase 2: Tilt back upright
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                openBookProgress = 0
+            }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
             if openBookProgress == 0 {
                 openBookIndex = nil
             }
@@ -985,7 +1017,6 @@ struct BookCarousel: View {
     var newBookDrop: CGFloat = 1
     var droppingBookIndex: Int? = nil
     var entranceSlide: CGFloat = 0
-
     private var isIPad: Bool { screenWidth > 500 }
     private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 : screenWidth * 0.58 }
     private var bookHeight: CGFloat { isIPad ? 456 : 342 }
@@ -1139,7 +1170,8 @@ struct BookCarousel: View {
                 .shadow(color: Color.black.opacity(0.10), radius: 8, x: 0, y: 4)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
+            .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 2.5))
+            .offset(y: openBookIndex == nil ? 0 : geometry.size.height * 0.4 * min(1, CGFloat(openBookProgress) * 2.5))
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
             // ── Books ──
@@ -1387,75 +1419,8 @@ struct LinedPageView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Background
-            Color(hex: "F4F2EC")
-
-            // Ruled lines
-            Canvas { context, size in
-                var y = topMargin
-                while y < size.height - 20 {
-                    context.stroke(
-                        Path { p in
-                            p.move(to: CGPoint(x: 24, y: y))
-                            p.addLine(to: CGPoint(x: size.width - 24, y: y))
-                        },
-                        with: .color(Color(hex: "C8C4BC").opacity(0.55)),
-                        lineWidth: 0.5
-                    )
-                    y += lineSpacing
-                }
-            }
-
-            // Date header
-            VStack(alignment: .leading, spacing: 4) {
-                Text(dateString)
-                    .font(.system(size: 16, weight: .bold, design: .serif))
-                    .foregroundColor(Color.black.opacity(0.75))
-                    .padding(.top, 16)
-                    .padding(.leading, 28)
-
-                // Page text content
-                if !pageText.isEmpty {
-                    Text(pageText)
-                        .font(.system(size: 15, design: .serif))
-                        .foregroundColor(Color.black.opacity(0.8))
-                        .padding(.leading, 28)
-                        .padding(.trailing, 28)
-                        .padding(.top, 4)
-                }
-            }
-
-            // "Tap to edit" placeholder
-            if pageText.isEmpty {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Text("Tap to edit")
-                            .font(.system(size: 15, design: .serif))
-                            .foregroundColor(Color.gray.opacity(0.5))
-                            .italic()
-                            .padding(.leading, 28)
-                            .padding(.bottom, 16)
-                        Spacer()
-                    }
-                }
-            }
-
-            // Page number
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text("\(pageNumber)/\(totalPages)")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Color.gray.opacity(0.55))
-                        .padding(.trailing, 24)
-                        .padding(.bottom, 16)
-                }
-            }
-        }
-        .frame(width: pageWidth, height: pageHeight)
+        Color(hex: "F4F2EC")
+            .frame(width: pageWidth, height: pageHeight)
     }
 }
 
@@ -1524,13 +1489,13 @@ struct BookItem: View {
         ZStack(alignment: .bottom) {
             // ── Open book view (Paper-style 3D page spread) ──
             if isOpening || openProgress > 0 {
-                let openBookW = screenWidth * 0.90
+                let isIPadBook = screenWidth > 500
+                let openBookW = isIPadBook ? screenWidth * 0.58 : screenWidth * 0.90
                 let openBookH = openBookW * 1.25
                 let pageInset: CGFloat = 10
                 let pageW = openBookW - pageInset * 2
                 let halfBookH = openBookH / 2
-                let spineGap: CGFloat = 2
-                let halfH = halfBookH - pageInset - spineGap
+                let halfH = halfBookH - pageInset
                 let totalPages = notebook.pages.count
                 let fullFlip = openBookH * 0.4
 
@@ -1638,12 +1603,22 @@ struct BookItem: View {
                             .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
                     )
                     .rotation3DEffect(
-                        .degrees(-10),
+                        .degrees(-13),
                         axis: (x: 1, y: 0, z: 0),
                         anchor: .top,
                         perspective: 0.35
                     )
-                    .offset(y: -halfBookH / 2 + 20)
+                    // Phase 2: cover unfolds from closed (160°) to open (0°) around spine
+                    .rotation3DEffect(
+                        .degrees({
+                            let phase2 = max(0, (Double(openProgress) - 0.5) * 2)
+                            return (1 - phase2) * 160
+                        }()),
+                        axis: (x: 1, y: 0, z: 0),
+                        anchor: .bottom,
+                        perspective: 0.25
+                    )
+                    .offset(y: -halfBookH / 2 + halfBookH * 0.07)
 
                     // ── BOTTOM PANEL (unturned pages) ──
                     ZStack {
@@ -1744,18 +1719,23 @@ struct BookItem: View {
                             .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
                     )
                     .rotation3DEffect(
-                        .degrees(10),
+                        .degrees(13),
                         axis: (x: 1, y: 0, z: 0),
                         anchor: .bottom,
                         perspective: 0.35
                     )
-                    .offset(y: halfBookH / 2 - 20)
+                    .offset(y: halfBookH / 2 - halfBookH * 0.07)
                 }
                 .frame(width: openBookW, height: openBookH)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
+                // Phase 1: rotate from portrait (-90°) to landscape (0°)
+                .rotationEffect(.degrees({
+                    let phase1 = min(1, Double(openProgress) * 2)
+                    return -90 + 90 * phase1
+                }()))
                 .offset(y: -(bookHeight - openBookH) / 2)
-                .opacity(min(1, Double(openProgress) * 2.5))
+                .opacity(openProgress > 0 ? 1 : 0)
             }
 
             // ── The book cover ──
@@ -1787,15 +1767,7 @@ struct BookItem: View {
                         .padding(.top, 13)
                     }
                 }
-                // Compound: cover flips open AND book rotates 90° CW — one motion
-                .rotation3DEffect(
-                    .degrees(Double(openProgress) * -180),
-                    axis: (x: 0, y: 1, z: 0),
-                    anchor: .leading,
-                    perspective: 0.4
-                )
-                .rotationEffect(.degrees(Double(openProgress) * 90))
-                .opacity(openProgress > 0.5 ? 0 : 1)
+                .opacity(openProgress > 0 ? 0 : 1)
         }
         .frame(width: bookWidth, height: bookHeight)
         // Vertical shade along the left edge
