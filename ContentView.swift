@@ -1408,6 +1408,7 @@ struct LinedPageView: View {
     let creationDate: Date
     let pageWidth: CGFloat
     let pageHeight: CGFloat
+    var depth: CGFloat = 0
 
     private let lineSpacing: CGFloat = 28
     private let topMargin: CGFloat = 56
@@ -1419,7 +1420,9 @@ struct LinedPageView: View {
     }
 
     var body: some View {
+        let darken = min(depth, 4) * 0.025
         Color(hex: "F4F2EC")
+            .overlay(Color.black.opacity(darken))
             .frame(width: pageWidth, height: pageHeight)
     }
 }
@@ -1493,9 +1496,6 @@ struct BookItem: View {
                 let openBookW = isIPadBook ? screenWidth * 0.58 : screenWidth * 0.90
                 let openBookH = openBookW * 1.25
                 let pageInset: CGFloat = 10
-                let pageW = openBookW - pageInset * 2
-                let halfBookH = openBookH / 2
-                let halfH = halfBookH - pageInset
                 let totalPages = notebook.pages.count
                 let fullFlip = openBookH * 0.4
 
@@ -1504,237 +1504,155 @@ struct BookItem: View {
                 let scrollPos = CGFloat(currentPage) + dragFraction
 
                 ZStack {
-                    // ── TOP PANEL (turned pages) ──
-                    ZStack {
-                        // Back cover
-                        notebook.coverColor
-                        UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 8)
-                            .strokeBorder(Color.black.opacity(0.3), lineWidth: 3)
-                            .blur(radius: 3)
-                            .padding(3)
+                    // ── FANNED PAGE STACK ──
+                    let fanSpacing: CGFloat = 18
+                    let clampedScroll = max(0, min(scrollPos, CGFloat(totalPages - 1)))
+                    let scrollFloor = Int(floor(clampedScroll))
+                    let frac = clampedScroll - CGFloat(scrollFloor)
+                    let turnedCount = min(scrollFloor, 4)
+                    let unturnedCount = min(max(totalPages - scrollFloor - 1, 0), 4)
 
-                        // Depth shading for top half
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.black.opacity(0.18), location: 0),
-                                .init(color: Color.black.opacity(0.04), location: 0.3),
-                                .init(color: Color.clear, location: 0.55),
-                                .init(color: Color.black.opacity(0.15), location: 1.0),
-                            ],
-                            startPoint: .top, endPoint: .bottom
+                    // Front cover lip (outermost turned)
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(notebook.coverColor)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color.black.opacity(0.2), lineWidth: 1.5)
                         )
-                        .allowsHitTesting(false)
+                        .frame(width: openBookW, height: openBookH)
+                        .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 3)
+                        .offset(y: -(CGFloat(turnedCount + 1) + frac) * fanSpacing)
+                        .zIndex(-100)
 
-                        // Top (turned) pages
-                        ForEach(0..<totalPages, id: \.self) { i in
-                            let diff = scrollPos - CGFloat(i)
-                            if diff > -5 && diff < 6 && diff > 0.5 {
-                                let pageText = notebook.pages[i].text
-                                let angle: Double = {
-                                    if diff < 1.0 {
-                                        return -(1.0 - Double(diff)) * 180.0
-                                    } else {
-                                        return Double(min(diff - 1.0, 4)) * 2.5
-                                    }
-                                }()
-                                let zOrder: Double = diff < 1.0 ? 100 : 50.0 - Double(diff - 1.0) * 10
-                                let shadowA: Double = diff < 1.0 ? sin(Double(diff) * .pi) * 0.25 : 0
+                    // Back cover lip (outermost unturned)
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(notebook.coverColor)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color.black.opacity(0.2), lineWidth: 1.5)
+                        )
+                        .frame(width: openBookW, height: openBookH)
+                        .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: -3)
+                        .offset(y: (CGFloat(unturnedCount + 1) - frac) * fanSpacing)
+                        .zIndex(-100)
 
-                                VStack(spacing: 0) {
-                                    LinedPageView(
-                                        pageText: pageText,
-                                        pageNumber: i + 1,
-                                        totalPages: totalPages,
-                                        creationDate: notebook.creationDate,
-                                        pageWidth: pageW,
-                                        pageHeight: halfH
-                                    )
-                                    .frame(width: pageW, height: halfH)
-                                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 6))
-                                    .overlay(alignment: .bottom) {
-                                        LinearGradient(
-                                            stops: [
-                                                .init(color: Color.black.opacity(0.22), location: 0),
-                                                .init(color: Color.black.opacity(0.12), location: 0.2),
-                                                .init(color: Color.black.opacity(0.04), location: 0.5),
-                                                .init(color: Color.clear, location: 1.0),
-                                            ],
-                                            startPoint: .bottom, endPoint: .top
-                                        )
-                                        .frame(height: 35)
-                                    }
-                                    .overlay {
-                                        Color.black.opacity(shadowA)
-                                            .allowsHitTesting(false)
-                                    }
-                                    .rotation3DEffect(
-                                        .degrees(angle),
-                                        axis: (x: 1, y: 0, z: 0),
-                                        anchor: .bottom,
-                                        perspective: 0.5
-                                    )
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(.horizontal, pageInset)
-                                .padding(.top, pageInset)
-                                .zIndex(zOrder)
-                            }
-                        }
-
-                        // Left spine binding
-                        HStack(spacing: 0) {
+                    // Spine binding line at fan center
+                    Rectangle()
+                        .fill(
                             LinearGradient(
                                 stops: [
-                                    .init(color: Color.black.opacity(0.35), location: 0),
-                                    .init(color: Color.black.opacity(0.15), location: 0.3),
-                                    .init(color: Color.clear, location: 1.0),
+                                    .init(color: Color.clear, location: 0),
+                                    .init(color: Color.black.opacity(0.15), location: 0.05),
+                                    .init(color: Color.black.opacity(0.25), location: 0.5),
+                                    .init(color: Color.black.opacity(0.15), location: 0.95),
+                                    .init(color: Color.clear, location: 1),
                                 ],
                                 startPoint: .leading, endPoint: .trailing
                             )
-                            .frame(width: 18)
-                            Spacer()
-                        }
-                        .allowsHitTesting(false)
-                    }
-                    .frame(width: openBookW, height: halfBookH)
-                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 10))
-                    .overlay(
-                        UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 10)
-                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
-                    )
-                    .rotation3DEffect(
-                        .degrees(-13),
-                        axis: (x: 1, y: 0, z: 0),
-                        anchor: .top,
-                        perspective: 0.35
-                    )
-                    // Phase 2: cover unfolds from closed (160°) to open (0°) around spine
-                    .rotation3DEffect(
-                        .degrees({
-                            let phase2 = max(0, (Double(openProgress) - 0.5) * 2)
-                            return (1 - phase2) * 160
-                        }()),
-                        axis: (x: 1, y: 0, z: 0),
-                        anchor: .bottom,
-                        perspective: 0.25
-                    )
-                    .offset(y: -halfBookH / 2 + halfBookH * 0.07)
-
-                    // ── BOTTOM PANEL (unturned pages) ──
-                    ZStack {
-                        // Back cover
-                        notebook.coverColor
-                        UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 8, bottomTrailingRadius: 8, topTrailingRadius: 0)
-                            .strokeBorder(Color.black.opacity(0.3), lineWidth: 3)
-                            .blur(radius: 3)
-                            .padding(3)
-
-                        // Depth shading for bottom half
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.black.opacity(0.15), location: 0),
-                                .init(color: Color.clear, location: 0.45),
-                                .init(color: Color.black.opacity(0.04), location: 0.7),
-                                .init(color: Color.black.opacity(0.18), location: 1.0),
-                            ],
-                            startPoint: .top, endPoint: .bottom
                         )
-                        .allowsHitTesting(false)
+                        .frame(width: openBookW, height: 2)
+                        .shadow(color: Color.black.opacity(0.12), radius: 3, x: 0, y: 1)
+                        .zIndex(200)
 
-                        // Bottom (unturned) pages
-                        ForEach(0..<totalPages, id: \.self) { i in
-                            let diff = scrollPos - CGFloat(i)
-                            if diff > -5 && diff < 6 && diff <= 0.5 {
-                                let pageText = notebook.pages[i].text
-                                let angle: Double = {
-                                    if diff >= 0 {
-                                        return Double(diff) * 180.0
-                                    } else {
-                                        return -Double(min(-diff, 4)) * 2.5
-                                    }
-                                }()
-                                let zOrder: Double = diff >= 0 ? 100 : 50.0 - Double(-diff) * 10
-                                let shadowA: Double = diff >= 0 ? sin(Double(diff) * .pi) * 0.25 : 0
+                    // All visible pages as fan
+                    ForEach(0..<totalPages, id: \.self) { i in
+                        let diff = clampedScroll - CGFloat(i)
+                        if diff > -5.5 && diff < 5.5 {
+                            let capped = max(-4.5, min(4.5, diff))
+                            let fanOffset = -capped * fanSpacing
+                            let absDiff = abs(diff)
+                            let zOrder = 100.0 - absDiff * 10
+                            let darkening = Double(min(max(absDiff - 0.5, 0), 4)) * 0.02
+                            let pageText = notebook.pages[i].text
 
-                                VStack(spacing: 0) {
-                                    Spacer(minLength: 0)
-                                    LinedPageView(
-                                        pageText: pageText,
-                                        pageNumber: i + 1,
-                                        totalPages: totalPages,
-                                        creationDate: notebook.creationDate,
-                                        pageWidth: pageW,
-                                        pageHeight: halfH
-                                    )
-                                    .frame(width: pageW, height: halfH)
-                                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 6, bottomTrailingRadius: 6, topTrailingRadius: 0))
-                                    .overlay(alignment: .top) {
-                                        LinearGradient(
-                                            stops: [
-                                                .init(color: Color.black.opacity(0.22), location: 0),
-                                                .init(color: Color.black.opacity(0.12), location: 0.2),
-                                                .init(color: Color.black.opacity(0.04), location: 0.5),
-                                                .init(color: Color.clear, location: 1.0),
-                                            ],
-                                            startPoint: .top, endPoint: .bottom
-                                        )
-                                        .frame(height: 35)
-                                    }
-                                    .overlay {
-                                        Color.black.opacity(shadowA)
-                                            .allowsHitTesting(false)
-                                    }
-                                    .rotation3DEffect(
-                                        .degrees(angle),
-                                        axis: (x: 1, y: 0, z: 0),
-                                        anchor: .top,
-                                        perspective: 0.5
-                                    )
-                                }
-                                .padding(.horizontal, pageInset)
-                                .padding(.bottom, pageInset)
-                                .zIndex(zOrder)
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(hex: "EDEBE5"))
+
+                                LinedPageView(
+                                    pageText: pageText,
+                                    pageNumber: i + 1,
+                                    totalPages: totalPages,
+                                    creationDate: notebook.creationDate,
+                                    pageWidth: openBookW - pageInset * 2,
+                                    pageHeight: openBookH - pageInset * 2,
+                                    depth: CGFloat(absDiff)
+                                )
+                                .padding(pageInset)
+
+                                // Depth darkening for stacked pages
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.black.opacity(darkening))
+                                    .allowsHitTesting(false)
+
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
                             }
-                        }
-
-                        // Left spine binding
-                        HStack(spacing: 0) {
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.black.opacity(0.35), location: 0),
-                                    .init(color: Color.black.opacity(0.15), location: 0.3),
-                                    .init(color: Color.clear, location: 1.0),
-                                ],
-                                startPoint: .leading, endPoint: .trailing
+                            .frame(width: openBookW, height: openBookH)
+                            // Binding crease line across center of page
+                            .overlay {
+                                VStack(spacing: 0) {
+                                    Spacer()
+                                    Rectangle()
+                                        .fill(
+                                            LinearGradient(
+                                                stops: [
+                                                    .init(color: Color.clear, location: 0),
+                                                    .init(color: Color.black.opacity(0.12), location: 0.05),
+                                                    .init(color: Color.black.opacity(0.18), location: 0.5),
+                                                    .init(color: Color.black.opacity(0.12), location: 0.95),
+                                                    .init(color: Color.clear, location: 1),
+                                                ],
+                                                startPoint: .leading, endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(height: 1.5)
+                                    // Subtle shadow below the crease
+                                    Rectangle()
+                                        .fill(
+                                            LinearGradient(
+                                                stops: [
+                                                    .init(color: Color.clear, location: 0),
+                                                    .init(color: Color.black.opacity(0.06), location: 0.1),
+                                                    .init(color: Color.black.opacity(0.10), location: 0.5),
+                                                    .init(color: Color.black.opacity(0.06), location: 0.9),
+                                                    .init(color: Color.clear, location: 1),
+                                                ],
+                                                startPoint: .leading, endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(height: 4)
+                                    Spacer()
+                                }
+                                .allowsHitTesting(false)
+                            }
+                            // 3D page turn tilt
+                            .rotation3DEffect(
+                                .degrees({
+                                    if absDiff < 1.0 {
+                                        // Transitioning: arc of tilt peaking at midpoint
+                                        return sin(Double(absDiff) * .pi) * (diff > 0 ? 25 : -25)
+                                    }
+                                    // Stacked pages: slight constant tilt
+                                    return diff > 0 ? 3.0 : -3.0
+                                }()),
+                                axis: (x: 1, y: 0, z: 0),
+                                anchor: .center,
+                                perspective: 0.35
                             )
-                            .frame(width: 18)
-                            Spacer()
+                            .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: diff > 0 ? 1.5 : -1.5)
+                            .offset(y: fanOffset)
+                            .zIndex(zOrder)
                         }
-                        .allowsHitTesting(false)
                     }
-                    .frame(width: openBookW, height: halfBookH)
-                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 10, bottomTrailingRadius: 10, topTrailingRadius: 0))
-                    .overlay(
-                        UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 10, bottomTrailingRadius: 10, topTrailingRadius: 0)
-                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
-                    )
-                    .rotation3DEffect(
-                        .degrees(13),
-                        axis: (x: 1, y: 0, z: 0),
-                        anchor: .bottom,
-                        perspective: 0.35
-                    )
-                    .offset(y: halfBookH / 2 - halfBookH * 0.07)
                 }
-                .frame(width: openBookW, height: openBookH)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
                 // Phase 1: rotate from portrait (-90°) to landscape (0°)
                 .rotationEffect(.degrees({
                     let phase1 = min(1, Double(openProgress) * 2)
                     return -90 + 90 * phase1
                 }()))
                 .offset(y: -(bookHeight - openBookH) / 2)
+                .offset(y: pageDragOffset * 0.2)
                 .opacity(openProgress > 0 ? 1 : 0)
             }
 
