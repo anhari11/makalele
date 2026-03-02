@@ -560,12 +560,12 @@ struct ContentView: View {
                                     let fullFlip = gestureBookW * 0.4
 
                                     if pageDragOffset < -threshold || velocity < -250 {
-                                        // Swipe left → turn forward
+                                        // Swipe left → turn forward (3D page flip)
                                         if currentPage < notebooks[openIndex].pages.count - 1 {
-                                            withAnimation(.easeOut(duration: 0.25)) {
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                                                 pageDragOffset = -fullFlip
                                             }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                                                 var t = Transaction()
                                                 t.disablesAnimations = true
                                                 withTransaction(t) {
@@ -579,12 +579,12 @@ struct ContentView: View {
                                             }
                                         }
                                     } else if pageDragOffset > threshold || velocity > 250 {
-                                        // Swipe right → turn backward
+                                        // Swipe right → turn backward (3D page flip)
                                         if currentPage > 0 {
-                                            withAnimation(.easeOut(duration: 0.25)) {
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                                                 pageDragOffset = fullFlip
                                             }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                                                 var t = Transaction()
                                                 t.disablesAnimations = true
                                                 withTransaction(t) {
@@ -1534,17 +1534,36 @@ struct PaperOpenBookView: View {
     let fullFlip: CGFloat
 
     var body: some View {
+        let halfW = spreadWidth / 2
         let cornerRadius = spreadHeight * 0.12
         let wave = spreadHeight * 0.02
-        let stackStepX = spreadWidth * 0.055
-        let stackStepY = spreadHeight * 0.015
         let clampedDrag = max(-fullFlip, min(fullFlip, dragOffset))
-        let dragProgress = fullFlip == 0 ? 0 : clampedDrag / fullFlip
-        let topOffsetX = clampedDrag * 0.18
-        let topRotation = Double(dragProgress) * 4
+
+        // Forward flip (swipe left): drag < 0, progress 0→1
+        let forwardP: CGFloat = (fullFlip > 0 && clampedDrag < 0)
+            ? min(1, -clampedDrag / fullFlip) : 0
+        // Backward flip (swipe right): drag > 0, progress 0→1
+        let backwardP: CGFloat = (fullFlip > 0 && clampedDrag > 0)
+            ? min(1, clampedDrag / fullFlip) : 0
+        let isFlipping = forwardP > 0.001 || backwardP > 0.001
+
+        // Flip angle: 0° = page on right side, 180° = page fully turned to left side
+        let flipAngle: Double = forwardP > 0.001
+            ? Double(forwardP) * 180
+            : (backwardP > 0.001 ? 180.0 - Double(backwardP) * 180.0 : 0)
+        let sinFlip = sin(flipAngle * .pi / 180)
+        let cosFlip = cos(flipAngle * .pi / 180)
+
+        // Half-page shape: straight spine edge (leading), rounded outer edge (trailing)
+        let halfShape = UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: cornerRadius * 0.8,
+            topTrailingRadius: cornerRadius * 0.8
+        )
 
         ZStack {
-            // Soft shadow below the stack
+            // ── Ambient shadow beneath the book ──
             PaperSheetShape(cornerRadius: cornerRadius, wave: wave)
                 .fill(Color.black.opacity(0.18))
                 .frame(width: spreadWidth, height: spreadHeight)
@@ -1552,52 +1571,131 @@ struct PaperOpenBookView: View {
                 .offset(y: spreadHeight * 0.12)
                 .scaleEffect(x: 0.96, y: 0.92)
 
-            // Left stack (pages already turned)
-            ForEach(0..<leftStack, id: \.self) { i in
-                let depth = CGFloat(leftStack - i)
-                PaperSheetView(
-                    width: spreadWidth,
-                    height: spreadHeight,
-                    cornerRadius: cornerRadius,
-                    wave: wave,
-                    isTop: false,
-                    darken: Double(i + 1) * 0.01
-                )
-                .offset(x: -stackStepX * depth, y: stackStepY * depth)
-                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+            // ── Page stack (depth cue) ──
+            let stackCount = max(leftStack, rightStack)
+            if stackCount > 0 {
+                ForEach(0..<min(stackCount, 3), id: \.self) { i in
+                    let depth = CGFloat(min(stackCount, 3) - i)
+                    PaperSheetView(
+                        width: spreadWidth,
+                        height: spreadHeight,
+                        cornerRadius: cornerRadius,
+                        wave: wave,
+                        isTop: false,
+                        darken: Double(depth) * 0.012
+                    )
+                    .offset(y: depth * 1.5)
+                }
             }
 
-            // Right stack (upcoming pages)
-            ForEach(0..<rightStack, id: \.self) { i in
-                let depth = CGFloat(rightStack - i)
-                PaperSheetView(
-                    width: spreadWidth,
-                    height: spreadHeight,
-                    cornerRadius: cornerRadius,
-                    wave: wave,
-                    isTop: false,
-                    darken: Double(i + 1) * 0.008
-                )
-                .offset(x: stackStepX * depth, y: stackStepY * depth)
-                .shadow(color: Color.black.opacity(0.07), radius: 7, x: 0, y: 4)
-            }
-
-            // Top sheet (current spread)
+            // ── Base spread (always visible — left and right pages with spine crease) ──
             PaperSheetView(
                 width: spreadWidth,
                 height: spreadHeight,
                 cornerRadius: cornerRadius,
                 wave: wave,
                 isTop: true,
-                darken: 0
+                darken: isFlipping ? 0.008 : 0
             )
-            .offset(x: topOffsetX)
-            .rotation3DEffect(
-                .degrees(topRotation),
-                axis: (x: 0, y: 1, z: 0),
-                perspective: 0.9
-            )
-            .shadow(color: Color.black.opacity(0.16), radius: 14, x: 0, y: 8)
+            .shadow(color: Color.black.opacity(isFlipping ? 0.08 : 0.16), radius: isFlipping ? 8 : 14, x: 0, y: isFlipping ? 4 : 8)
+
+            // ── Fold shadow cast by turning half-page onto the base spread ──
+            if isFlipping && flipAngle > 1 && flipAngle < 179 {
+                let shadowAlpha = 0.18 * sinFlip
+                let shadowW = halfW * 0.08 + halfW * 0.14 * CGFloat(sinFlip)
+                let edgeX = halfW * 0.5 * CGFloat(cosFlip)
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.clear, location: 0),
+                                .init(color: Color.black.opacity(shadowAlpha * 0.5), location: 0.25),
+                                .init(color: Color.black.opacity(shadowAlpha), location: 0.5),
+                                .init(color: Color.black.opacity(shadowAlpha * 0.3), location: 0.75),
+                                .init(color: Color.clear, location: 1)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: shadowW, height: spreadHeight * 0.94)
+                    .offset(x: edgeX)
+                    .blur(radius: 2 + 4 * CGFloat(sinFlip))
+                    .allowsHitTesting(false)
+            }
+
+            // ── The turning half-page (fans around the spine from right to left) ──
+            if isFlipping {
+                let showBack = flipAngle > 90
+
+                Group {
+                    if showBack {
+                        // Back of the page — slightly warmer/darker blank paper
+                        halfShape
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "F0EEE8"), Color(hex: "E8E6E0")],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .overlay(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: Color.black.opacity(0.05), location: 0),
+                                        .init(color: Color.clear, location: 0.15),
+                                        .init(color: Color.clear, location: 0.85),
+                                        .init(color: Color.black.opacity(0.03), location: 1)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                                .clipShape(halfShape)
+                            )
+                            .overlay(halfShape.stroke(Color.black.opacity(0.06), lineWidth: 0.5))
+                            .frame(width: halfW, height: spreadHeight)
+                    } else {
+                        // Front of the page — matches base spread paper
+                        halfShape
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "F7F6F1"), Color(hex: "EEECE6")],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .overlay(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: Color.black.opacity(0.06), location: 0),
+                                        .init(color: Color.clear, location: 0.12),
+                                        .init(color: Color.clear, location: 0.88),
+                                        .init(color: Color.black.opacity(0.04), location: 1)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                                .clipShape(halfShape)
+                            )
+                            .overlay(halfShape.stroke(Color.black.opacity(0.08), lineWidth: 0.6))
+                            .frame(width: halfW, height: spreadHeight)
+                    }
+                }
+                .rotation3DEffect(
+                    .degrees(-flipAngle),
+                    axis: (x: 0, y: 1, z: 0),
+                    anchor: .leading,
+                    perspective: 0.35
+                )
+                .offset(x: halfW / 2) // leading edge sits at spine (center)
+                .shadow(
+                    color: Color.black.opacity(0.12 * sinFlip),
+                    radius: 12,
+                    x: -8 * CGFloat(sinFlip),
+                    y: 3
+                )
+            }
         }
         .frame(width: frameWidth, height: frameHeight, alignment: .center)
     }
