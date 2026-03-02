@@ -115,7 +115,6 @@ struct ContentView: View {
     @State private var cursorTimer: Timer? = nil
     @State private var entranceSlide: CGFloat = 1500
     @State private var hasAppeared: Bool = false
-    @State private var shimmerPhase: CGFloat = -1
     @State private var aboveCarouselHeight: CGFloat = 0
 @FocusState private var isTitleFieldFocused: Bool
 
@@ -154,15 +153,23 @@ struct ContentView: View {
         GeometryReader { geometry in
             let isIPad = min(geometry.size.width, geometry.size.height) > 500
             ZStack {
-                Color.white
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        if isNamingNewBook {
-                            finishNaming()
-                        }
-                    }
+                ZStack {
+                    Color(hex: "3B425D")
+                        .opacity(openBookProgress > 0 ? 1 : 0)
+                        .ignoresSafeArea()
 
-                // Background stays white when opening
+                    Color.white
+                        .opacity(openBookProgress > 0 ? 0 : 1)
+                        .ignoresSafeArea()
+                }
+                .animation(.easeInOut(duration: 0.45), value: openBookProgress)
+                .onTapGesture {
+                    if isNamingNewBook {
+                        finishNaming()
+                    }
+                }
+
+                // Background shifts to dark slate when opening
 
                 VStack(spacing: 0) {
                     let dismissProgress = min(1, CGFloat(openBookProgress) * 2.5)
@@ -187,34 +194,8 @@ struct ContentView: View {
 
                         Spacer()
 
-                        if isIPad {
-                            Button(action: { addNewAlbum() }) {
-                                HStack(alignment: .center, spacing: 6) {
-                                    Image("bag")
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 62, height: 62)
-                                        .clipShape(Circle())
-                                        .opacity(1 - Double(openBookProgress) * 0.5)
-
-                                    Text("Buy it now")
-                                        .foregroundStyle(Color.black)
-                                        .fontWeight(.bold)
-                                        .font(.system(size: 17))
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 17, weight: .bold))
-                                        .foregroundColor(Color(hex: "#898988"))
-                                }
-                            }
-                            .buttonStyle(.plain)
-
-                            Spacer()
-                        }
-
                         // Profile image
-                        Button(action: {}) {
-                            Image(systemName: "person.crop.circle.fill")
+                        Button(action: {}) {                            Image(systemName: "person.crop.circle.fill")
                                 .font(.system(size: 32))
                                 .foregroundColor(Color(hex: "C7C7CC"))
                         }
@@ -232,60 +213,80 @@ struct ContentView: View {
                     Spacer().frame(height: geometry.size.height * 0.10 - 70)
 
                     // Book title + chevron
-                    HStack(spacing: 3) {
-                        ZStack {
-                            TextField("", text: $newBookTitle)
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.black)
-                                .multilineTextAlignment(.center)
-                                .tint(.clear)
-                                .focused($isTitleFieldFocused)
-                                .onSubmit { finishNaming() }
-                                .opacity(isNamingNewBook ? 1 : 0)
-                                .allowsHitTesting(isNamingNewBook)
-
-                            if isNamingNewBook && newBookTitle.isEmpty {
-                                HStack(spacing: 0) {
-                                    Text("Untitled")
-                                        .font(.system(size: 22, weight: .bold))
-                                        .foregroundColor(.gray.opacity(0.5))
-                                    Rectangle()
-                                        .fill(Color.black)
-                                        .frame(width: 2, height: 20)
-                                        .opacity(cursorVisible ? 1 : 0)
-                                }
-                                .allowsHitTesting(false)
-                            }
-
-                            if !isNamingNewBook {
-                                Text(notebooks[selectedIndex].title)
+                    ZStack {
+                        HStack(spacing: 3) {
+                            ZStack {
+                                TextField("", text: $newBookTitle)
                                     .font(.system(size: 22, weight: .bold))
                                     .foregroundColor(.black)
+                                    .multilineTextAlignment(.center)
+                                    .tint(.clear)
+                                    .focused($isTitleFieldFocused)
+                                    .onSubmit { finishNaming() }
+                                    .opacity(isNamingNewBook ? 1 : 0)
+                                    .allowsHitTesting(isNamingNewBook)
+
+                                if isNamingNewBook && newBookTitle.isEmpty {
+                                    HStack(spacing: 0) {
+                                        Text("Untitled")
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundColor(.gray.opacity(0.5))
+                                        Rectangle()
+                                            .fill(Color.black)
+                                            .frame(width: 2, height: 20)
+                                            .opacity(cursorVisible ? 1 : 0)
+                                    }
+                                    .allowsHitTesting(false)
+                                }
+
+                                if !isNamingNewBook {
+                                    Text(notebooks[selectedIndex].title)
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.black)
+                                }
                             }
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
-                        .background(Color(hex: "EFEFEF"))
-                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 6, bottomTrailingRadius: 0, topTrailingRadius: 0))
-                        .fixedSize()
-                        Button(action: {}) {
-                            HStack(spacing: 0) {
-                                Image(systemName: "chevron.down")
-                                    .foregroundStyle(Color.white)
-                                    .fontWeight(.bold)
-                                    .font(.system(size: 20, weight: .bold))
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .background(Color(hex: "EFEFEF"))
+                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 6, bottomTrailingRadius: 0, topTrailingRadius: 0))
+                            .fixedSize()
+                            Button(action: {}) {
+                                HStack(spacing: 0) {
+                                    Image(systemName: "chevron.down")
+                                        .foregroundStyle(Color.white)
+                                        .fontWeight(.bold)
+                                        .font(.system(size: 20, weight: .bold))
+                                }
                             }
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 14)
+                            .background(Color(hex: "#0e89fc"))
+                            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
                         }
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 14)
-                        .background(Color(hex: "#0e89fc"))
-                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
+                        .scaleEffect(isNamingNewBook ? 1.25 : 1.0)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isNamingNewBook)
+                        .offset(x: dragOffset)
+                        .animation(.smooth(duration: 0.5), value: selectedIndex)
+                        .animation(.smooth(duration: 0.15), value: dragOffset)
+
+                        if isIPad {
+                            HStack {
+                                Spacer()
+                                Button(action: { addNewAlbum() }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.black)
+                                            .frame(width: 50, height: 50)
+                                        Image(systemName: "plus")
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 16)
+                        }
                     }
-                    .scaleEffect(isNamingNewBook ? 1.25 : 1.0)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isNamingNewBook)
-                    .offset(x: dragOffset)
-                    .animation(.smooth(duration: 0.5), value: selectedIndex)
-                    .animation(.smooth(duration: 0.15), value: dragOffset)
                     .padding(.bottom, 40)
 
                     // Aanhari x and Share with friends
@@ -391,6 +392,7 @@ struct ContentView: View {
                             entranceSlide: entranceSlide
                         )
                     .frame(height: isIPad ? 575 : 450)
+                    .allowsHitTesting(openBookIndex == nil)
                     .offset(y: {
                         guard openBookIndex != nil else { return CGFloat(0) }
                         let carouselH: CGFloat = isIPad ? 575 : 450
@@ -544,26 +546,32 @@ struct ContentView: View {
                         .contentShape(Rectangle())
                         .ignoresSafeArea()
                         .gesture(
-                            DragGesture(minimumDistance: 20)
+                            DragGesture(minimumDistance: 10)
                                 .onChanged { value in
-                                    pageDragOffset = value.translation.height
+                                    pageDragOffset = value.translation.width
                                 }
                                 .onEnded { value in
                                     let threshold: CGFloat = 50
-                                    let velocity = value.velocity.height
-                                    // Full flip distance — matches BookItem's openBookH * 0.4
+                                    let velocity = value.velocity.width
+                                    // Full flip distance — matches BookItem's openBookW * 0.4
                                     let screenW = min(geometry.size.width, geometry.size.height)
-                                    let fullFlip = screenW * 0.90 * 1.25 * 0.4
+                                    let isIPadGesture = screenW > 500
+                                    let gestureBookW = isIPadGesture ? screenW * 0.44 : screenW * 0.82
+                                    let fullFlip = gestureBookW * 0.4
 
                                     if pageDragOffset < -threshold || velocity < -250 {
-                                        // Swipe up → turn forward
+                                        // Swipe left → turn forward
                                         if currentPage < notebooks[openIndex].pages.count - 1 {
                                             withAnimation(.easeOut(duration: 0.25)) {
                                                 pageDragOffset = -fullFlip
                                             }
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                                currentPage += 1
-                                                pageDragOffset = 0
+                                                var t = Transaction()
+                                                t.disablesAnimations = true
+                                                withTransaction(t) {
+                                                    currentPage += 1
+                                                    pageDragOffset = 0
+                                                }
                                             }
                                         } else {
                                             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -571,14 +579,18 @@ struct ContentView: View {
                                             }
                                         }
                                     } else if pageDragOffset > threshold || velocity > 250 {
-                                        // Swipe down → turn backward
+                                        // Swipe right → turn backward
                                         if currentPage > 0 {
                                             withAnimation(.easeOut(duration: 0.25)) {
                                                 pageDragOffset = fullFlip
                                             }
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                                currentPage -= 1
-                                                pageDragOffset = 0
+                                                var t = Transaction()
+                                                t.disablesAnimations = true
+                                                withTransaction(t) {
+                                                    currentPage -= 1
+                                                    pageDragOffset = 0
+                                                }
                                             }
                                         } else {
                                             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -603,63 +615,20 @@ struct ContentView: View {
                 VStack {
                     Spacer()
                     HStack(alignment: .center) {
-                        Button(action: {}) {
-                            HStack(alignment: .center, spacing: 8) {
-                                Image("bag")
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 30, height: 30)
-
-                                Text("Get printed book")
-                                    .fontWeight(.bold)
-                                    .font(.system(size: 17))
-                                    .overlay(
-                                        GeometryReader { geo in
-                                            LinearGradient(
-                                                stops: [
-                                                    .init(color: Color.clear, location: 0.0),
-                                                    .init(color: Color.clear, location: 0.3),
-                                                    .init(color: Color.white.opacity(0.7), location: 0.5),
-                                                    .init(color: Color.clear, location: 0.7),
-                                                    .init(color: Color.clear, location: 1.0)
-                                                ],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                            .frame(width: geo.size.width * 3)
-                                            .offset(x: geo.size.width * shimmerPhase * 1.5)
-                                        }
-                                        .mask(
-                                            Text("Get printed book")
-                                                .fontWeight(.bold)
-                                                .font(.system(size: 17))
-                                        )
-                                    )
-                                    .foregroundStyle(Color(hex: "3D3D3D"))
-                                    .onAppear {
-                                        withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: false)) {
-                                            shimmerPhase = 1
-                                        }
-                                    }
-
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 17, weight: .bold))
-                                    .foregroundColor(Color(hex: "#898988"))
-                            }
-                        }
-                        .buttonStyle(.plain)
                         Spacer()
-                        Button(action: { addNewAlbum() }) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.black)
-                                    .frame(width: 50, height: 50)
-                                Image(systemName: "plus")
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundColor(.white)
+                        if !isIPad {
+                            Button(action: { addNewAlbum() }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.black)
+                                        .frame(width: 50, height: 50)
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
                             }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -1427,6 +1396,213 @@ struct LinedPageView: View {
     }
 }
 
+// MARK: - Paper Open Book Views
+
+struct PaperSheetShape: Shape {
+    let cornerRadius: CGFloat
+    let wave: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let r = min(cornerRadius, min(rect.width, rect.height) * 0.2)
+        let w = min(wave, rect.height * 0.08)
+        let topY = rect.minY
+        let bottomY = rect.maxY
+        let leftX = rect.minX
+        let rightX = rect.maxX
+        let midX = rect.midX
+        let waveSpan = rect.width * 0.26
+
+        var path = Path()
+        path.move(to: CGPoint(x: leftX + r, y: topY))
+
+        // Top edge with gentle dip
+        path.addLine(to: CGPoint(x: midX - waveSpan, y: topY))
+        path.addQuadCurve(
+            to: CGPoint(x: midX + waveSpan, y: topY),
+            control: CGPoint(x: midX, y: topY + w)
+        )
+        path.addLine(to: CGPoint(x: rightX - r, y: topY))
+
+        // Top-right corner
+        path.addQuadCurve(
+            to: CGPoint(x: rightX, y: topY + r),
+            control: CGPoint(x: rightX, y: topY)
+        )
+
+        // Right edge
+        path.addLine(to: CGPoint(x: rightX, y: bottomY - r))
+
+        // Bottom-right corner
+        path.addQuadCurve(
+            to: CGPoint(x: rightX - r, y: bottomY),
+            control: CGPoint(x: rightX, y: bottomY)
+        )
+
+        // Bottom edge with gentle rise
+        path.addLine(to: CGPoint(x: midX + waveSpan, y: bottomY))
+        path.addQuadCurve(
+            to: CGPoint(x: midX - waveSpan, y: bottomY),
+            control: CGPoint(x: midX, y: bottomY - w)
+        )
+        path.addLine(to: CGPoint(x: leftX + r, y: bottomY))
+
+        // Bottom-left corner
+        path.addQuadCurve(
+            to: CGPoint(x: leftX, y: bottomY - r),
+            control: CGPoint(x: leftX, y: bottomY)
+        )
+
+        // Left edge
+        path.addLine(to: CGPoint(x: leftX, y: topY + r))
+
+        // Top-left corner
+        path.addQuadCurve(
+            to: CGPoint(x: leftX + r, y: topY),
+            control: CGPoint(x: leftX, y: topY)
+        )
+
+        return path
+    }
+}
+
+struct PaperSheetView: View {
+    let width: CGFloat
+    let height: CGFloat
+    let cornerRadius: CGFloat
+    let wave: CGFloat
+    var isTop: Bool = false
+    var darken: Double = 0
+
+    var body: some View {
+        let shape = PaperSheetShape(cornerRadius: cornerRadius, wave: wave)
+        let baseGradient = LinearGradient(
+            colors: [Color(hex: "F7F6F1"), Color(hex: "EEECE6")],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        let edgeShade = LinearGradient(
+            stops: [
+                .init(color: Color.black.opacity(0.08), location: 0),
+                .init(color: Color.clear, location: 0.12),
+                .init(color: Color.clear, location: 0.88),
+                .init(color: Color.black.opacity(0.05), location: 1)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        shape
+            .fill(baseGradient)
+            .overlay(edgeShade.clipShape(shape))
+            .overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 0.6))
+            .overlay(alignment: .center) {
+                if isTop {
+                    ZStack {
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.black.opacity(0.16),
+                                        Color.black.opacity(0.03),
+                                        Color.black.opacity(0.16)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 10, height: height)
+                            .blur(radius: 0.6)
+                        Rectangle()
+                            .fill(Color.white.opacity(0.35))
+                            .frame(width: 1, height: height * 0.9)
+                    }
+                }
+            }
+            .overlay(Color.black.opacity(darken).clipShape(shape))
+            .frame(width: width, height: height)
+    }
+}
+
+struct PaperOpenBookView: View {
+    let spreadWidth: CGFloat
+    let spreadHeight: CGFloat
+    let frameWidth: CGFloat
+    let frameHeight: CGFloat
+    let leftStack: Int
+    let rightStack: Int
+    let dragOffset: CGFloat
+    let fullFlip: CGFloat
+
+    var body: some View {
+        let cornerRadius = spreadHeight * 0.12
+        let wave = spreadHeight * 0.02
+        let stackStepX = spreadWidth * 0.055
+        let stackStepY = spreadHeight * 0.015
+        let clampedDrag = max(-fullFlip, min(fullFlip, dragOffset))
+        let dragProgress = fullFlip == 0 ? 0 : clampedDrag / fullFlip
+        let topOffsetX = clampedDrag * 0.18
+        let topRotation = Double(dragProgress) * 4
+
+        ZStack {
+            // Soft shadow below the stack
+            PaperSheetShape(cornerRadius: cornerRadius, wave: wave)
+                .fill(Color.black.opacity(0.18))
+                .frame(width: spreadWidth, height: spreadHeight)
+                .blur(radius: spreadHeight * 0.14)
+                .offset(y: spreadHeight * 0.12)
+                .scaleEffect(x: 0.96, y: 0.92)
+
+            // Left stack (pages already turned)
+            ForEach(0..<leftStack, id: \.self) { i in
+                let depth = CGFloat(leftStack - i)
+                PaperSheetView(
+                    width: spreadWidth,
+                    height: spreadHeight,
+                    cornerRadius: cornerRadius,
+                    wave: wave,
+                    isTop: false,
+                    darken: Double(i + 1) * 0.01
+                )
+                .offset(x: -stackStepX * depth, y: stackStepY * depth)
+                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+            }
+
+            // Right stack (upcoming pages)
+            ForEach(0..<rightStack, id: \.self) { i in
+                let depth = CGFloat(rightStack - i)
+                PaperSheetView(
+                    width: spreadWidth,
+                    height: spreadHeight,
+                    cornerRadius: cornerRadius,
+                    wave: wave,
+                    isTop: false,
+                    darken: Double(i + 1) * 0.008
+                )
+                .offset(x: stackStepX * depth, y: stackStepY * depth)
+                .shadow(color: Color.black.opacity(0.07), radius: 7, x: 0, y: 4)
+            }
+
+            // Top sheet (current spread)
+            PaperSheetView(
+                width: spreadWidth,
+                height: spreadHeight,
+                cornerRadius: cornerRadius,
+                wave: wave,
+                isTop: true,
+                darken: 0
+            )
+            .offset(x: topOffsetX)
+            .rotation3DEffect(
+                .degrees(topRotation),
+                axis: (x: 0, y: 1, z: 0),
+                perspective: 0.9
+            )
+            .shadow(color: Color.black.opacity(0.16), radius: 14, x: 0, y: 8)
+        }
+        .frame(width: frameWidth, height: frameHeight, alignment: .center)
+    }
+}
+
 // MARK: - Book Item
 
 struct BookItem: View {
@@ -1490,169 +1666,29 @@ struct BookItem: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // ── Open book view (Paper-style 3D page spread) ──
+            // ── Open book view (Paper app inspired spread) ──
             if isOpening || openProgress > 0 {
                 let isIPadBook = screenWidth > 500
-                let openBookW = isIPadBook ? screenWidth * 0.58 : screenWidth * 0.90
-                let openBookH = openBookW * 1.25
-                let pageInset: CGFloat = 10
+                let openBookW = isIPadBook ? screenWidth * 0.44 : screenWidth * 0.82
+                let openBookH = openBookW * 1.45
+                let spreadW = openBookW
+                let spreadH = openBookW * 0.62
+                let fullFlip = openBookW * 0.4
                 let totalPages = notebook.pages.count
-                let fullFlip = openBookH * 0.4
+                let hasMultiplePages = totalPages > 1
+                let leftStack = hasMultiplePages ? min(3, max(1, currentPage)) : 0
+                let rightStack = hasMultiplePages ? min(3, max(1, totalPages - currentPage - 1)) : 0
 
-                // Continuous scroll position: currentPage + fractional drag
-                let dragFraction = -pageDragOffset / fullFlip
-                let scrollPos = CGFloat(currentPage) + dragFraction
-
-                ZStack {
-                    // ── FANNED PAGE STACK ──
-                    let fanSpacing: CGFloat = 18
-                    let clampedScroll = max(0, min(scrollPos, CGFloat(totalPages - 1)))
-                    let scrollFloor = Int(floor(clampedScroll))
-                    let frac = clampedScroll - CGFloat(scrollFloor)
-                    let turnedCount = min(scrollFloor, 4)
-                    let unturnedCount = min(max(totalPages - scrollFloor - 1, 0), 4)
-
-                    // Front cover lip (outermost turned)
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(notebook.coverColor)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(Color.black.opacity(0.2), lineWidth: 1.5)
-                        )
-                        .frame(width: openBookW, height: openBookH)
-                        .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 3)
-                        .offset(y: -(CGFloat(turnedCount + 1) + frac) * fanSpacing)
-                        .zIndex(-100)
-
-                    // Back cover lip (outermost unturned)
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(notebook.coverColor)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(Color.black.opacity(0.2), lineWidth: 1.5)
-                        )
-                        .frame(width: openBookW, height: openBookH)
-                        .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: -3)
-                        .offset(y: (CGFloat(unturnedCount + 1) - frac) * fanSpacing)
-                        .zIndex(-100)
-
-                    // Spine binding line at fan center
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.clear, location: 0),
-                                    .init(color: Color.black.opacity(0.15), location: 0.05),
-                                    .init(color: Color.black.opacity(0.25), location: 0.5),
-                                    .init(color: Color.black.opacity(0.15), location: 0.95),
-                                    .init(color: Color.clear, location: 1),
-                                ],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                        )
-                        .frame(width: openBookW, height: 2)
-                        .shadow(color: Color.black.opacity(0.12), radius: 3, x: 0, y: 1)
-                        .zIndex(200)
-
-                    // All visible pages as fan
-                    ForEach(0..<totalPages, id: \.self) { i in
-                        let diff = clampedScroll - CGFloat(i)
-                        if diff > -5.5 && diff < 5.5 {
-                            let capped = max(-4.5, min(4.5, diff))
-                            let fanOffset = -capped * fanSpacing
-                            let absDiff = abs(diff)
-                            let zOrder = 100.0 - absDiff * 10
-                            let darkening = Double(min(max(absDiff - 0.5, 0), 4)) * 0.02
-                            let pageText = notebook.pages[i].text
-
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color(hex: "EDEBE5"))
-
-                                LinedPageView(
-                                    pageText: pageText,
-                                    pageNumber: i + 1,
-                                    totalPages: totalPages,
-                                    creationDate: notebook.creationDate,
-                                    pageWidth: openBookW - pageInset * 2,
-                                    pageHeight: openBookH - pageInset * 2,
-                                    depth: CGFloat(absDiff)
-                                )
-                                .padding(pageInset)
-
-                                // Depth darkening for stacked pages
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.black.opacity(darkening))
-                                    .allowsHitTesting(false)
-
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
-                            }
-                            .frame(width: openBookW, height: openBookH)
-                            // Binding crease line across center of page
-                            .overlay {
-                                VStack(spacing: 0) {
-                                    Spacer()
-                                    Rectangle()
-                                        .fill(
-                                            LinearGradient(
-                                                stops: [
-                                                    .init(color: Color.clear, location: 0),
-                                                    .init(color: Color.black.opacity(0.12), location: 0.05),
-                                                    .init(color: Color.black.opacity(0.18), location: 0.5),
-                                                    .init(color: Color.black.opacity(0.12), location: 0.95),
-                                                    .init(color: Color.clear, location: 1),
-                                                ],
-                                                startPoint: .leading, endPoint: .trailing
-                                            )
-                                        )
-                                        .frame(height: 1.5)
-                                    // Subtle shadow below the crease
-                                    Rectangle()
-                                        .fill(
-                                            LinearGradient(
-                                                stops: [
-                                                    .init(color: Color.clear, location: 0),
-                                                    .init(color: Color.black.opacity(0.06), location: 0.1),
-                                                    .init(color: Color.black.opacity(0.10), location: 0.5),
-                                                    .init(color: Color.black.opacity(0.06), location: 0.9),
-                                                    .init(color: Color.clear, location: 1),
-                                                ],
-                                                startPoint: .leading, endPoint: .trailing
-                                            )
-                                        )
-                                        .frame(height: 4)
-                                    Spacer()
-                                }
-                                .allowsHitTesting(false)
-                            }
-                            // 3D page turn tilt
-                            .rotation3DEffect(
-                                .degrees({
-                                    if absDiff < 1.0 {
-                                        // Transitioning: arc of tilt peaking at midpoint
-                                        return sin(Double(absDiff) * .pi) * (diff > 0 ? 25 : -25)
-                                    }
-                                    // Stacked pages: slight constant tilt
-                                    return diff > 0 ? 3.0 : -3.0
-                                }()),
-                                axis: (x: 1, y: 0, z: 0),
-                                anchor: .center,
-                                perspective: 0.35
-                            )
-                            .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: diff > 0 ? 1.5 : -1.5)
-                            .offset(y: fanOffset)
-                            .zIndex(zOrder)
-                        }
-                    }
-                }
-                // Phase 1: rotate from portrait (-90°) to landscape (0°)
-                .rotationEffect(.degrees({
-                    let phase1 = min(1, Double(openProgress) * 2)
-                    return -90 + 90 * phase1
-                }()))
-                .offset(y: -(bookHeight - openBookH) / 2)
-                .offset(y: pageDragOffset * 0.2)
+                PaperOpenBookView(
+                    spreadWidth: spreadW,
+                    spreadHeight: spreadH,
+                    frameWidth: openBookW,
+                    frameHeight: openBookH,
+                    leftStack: leftStack,
+                    rightStack: rightStack,
+                    dragOffset: pageDragOffset,
+                    fullFlip: fullFlip
+                )
                 .opacity(openProgress > 0 ? 1 : 0)
             }
 
