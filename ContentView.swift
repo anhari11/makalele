@@ -1415,11 +1415,14 @@ struct PaperSheetShape: Shape {
         var path = Path()
         path.move(to: CGPoint(x: leftX + r, y: topY))
 
-        // Top edge with gentle dip
+        let midY = rect.midY
+        let sideWave = w * 0.6
+
+        // Top edge — convex bulge upward
         path.addLine(to: CGPoint(x: midX - waveSpan, y: topY))
         path.addQuadCurve(
             to: CGPoint(x: midX + waveSpan, y: topY),
-            control: CGPoint(x: midX, y: topY + w)
+            control: CGPoint(x: midX, y: topY - w)
         )
         path.addLine(to: CGPoint(x: rightX - r, y: topY))
 
@@ -1429,8 +1432,11 @@ struct PaperSheetShape: Shape {
             control: CGPoint(x: rightX, y: topY)
         )
 
-        // Right edge
-        path.addLine(to: CGPoint(x: rightX, y: bottomY - r))
+        // Right edge — convex bulge outward
+        path.addQuadCurve(
+            to: CGPoint(x: rightX, y: bottomY - r),
+            control: CGPoint(x: rightX + sideWave, y: midY)
+        )
 
         // Bottom-right corner
         path.addQuadCurve(
@@ -1438,11 +1444,11 @@ struct PaperSheetShape: Shape {
             control: CGPoint(x: rightX, y: bottomY)
         )
 
-        // Bottom edge with gentle rise
+        // Bottom edge — convex bulge downward
         path.addLine(to: CGPoint(x: midX + waveSpan, y: bottomY))
         path.addQuadCurve(
             to: CGPoint(x: midX - waveSpan, y: bottomY),
-            control: CGPoint(x: midX, y: bottomY - w)
+            control: CGPoint(x: midX, y: bottomY + w)
         )
         path.addLine(to: CGPoint(x: leftX + r, y: bottomY))
 
@@ -1452,8 +1458,11 @@ struct PaperSheetShape: Shape {
             control: CGPoint(x: leftX, y: bottomY)
         )
 
-        // Left edge
-        path.addLine(to: CGPoint(x: leftX, y: topY + r))
+        // Left edge — convex bulge outward
+        path.addQuadCurve(
+            to: CGPoint(x: leftX, y: topY + r),
+            control: CGPoint(x: leftX - sideWave, y: midY)
+        )
 
         // Top-left corner
         path.addQuadCurve(
@@ -1497,25 +1506,9 @@ struct PaperSheetView: View {
             .overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 0.6))
             .overlay(alignment: .center) {
                 if isTop {
-                    ZStack {
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.black.opacity(0.16),
-                                        Color.black.opacity(0.03),
-                                        Color.black.opacity(0.16)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: 10, height: height)
-                            .blur(radius: 0.6)
-                        Rectangle()
-                            .fill(Color.white.opacity(0.35))
-                            .frame(width: 1, height: height * 0.9)
-                    }
+                    Rectangle()
+                        .fill(Color.black.opacity(0.10))
+                        .frame(width: 0.5, height: height * 0.92)
                 }
             }
             .overlay(Color.black.opacity(darken).clipShape(shape))
@@ -1547,12 +1540,6 @@ struct PaperOpenBookView: View {
             ? min(1, clampedDrag / fullFlip) : 0
         let isFlipping = forwardP > 0.001 || backwardP > 0.001
 
-        // Flip angle: 0° = page on right side, 180° = page fully turned to left side
-        let flipAngle: Double = forwardP > 0.001
-            ? Double(forwardP) * 180
-            : (backwardP > 0.001 ? 180.0 - Double(backwardP) * 180.0 : 0)
-        let sinFlip = sin(flipAngle * .pi / 180)
-        let cosFlip = cos(flipAngle * .pi / 180)
 
         // Half-page shape: straight spine edge (leading), rounded outer edge (trailing)
         let halfShape = UnevenRoundedRectangle(
@@ -1572,25 +1559,38 @@ struct PaperOpenBookView: View {
                 .scaleEffect(x: 0.96, y: 0.92)
 
             // ── Fanning page stack (full spreads, each wider than the one above) ──
+            // Normalized drag progress: –1 (full forward) to +1 (full backward)
+            let dragNorm: CGFloat = fullFlip > 0 ? clampedDrag / fullFlip : 0
             let stackCount = max(leftStack, rightStack)
             if stackCount > 0 {
                 ForEach(0..<min(stackCount, 4), id: \.self) { i in
                     let depth = CGFloat(min(stackCount, 4) - i)
-                    let extraW = depth * spreadWidth * 0.07
+                    let extraW = depth * spreadWidth * 0.11
+                    // Exponential falloff: shallow pages react more, deep pages barely budge
+                    let reactivity = pow(0.45, depth - 1) // 1.0, 0.45, 0.20, 0.09
+                    let pageShiftX = dragNorm * halfW * 0.08 * reactivity
+                    let pageTiltY = Double(-dragNorm) * 6.0 * Double(reactivity)
+
                     PaperSheetView(
                         width: spreadWidth + extraW,
                         height: spreadHeight,
                         cornerRadius: cornerRadius,
                         wave: wave,
                         isTop: false,
-                        darken: Double(depth) * 0.008
+                        darken: Double(depth) * 0.010
                     )
-                    .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
-                    .offset(y: depth * 1.2)
+                    .rotation3DEffect(
+                        .degrees(pageTiltY),
+                        axis: (x: 0, y: 1, z: 0),
+                        perspective: 0.25
+                    )
+                    .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 2)
+                    .offset(x: pageShiftX, y: depth * 3.5)
                 }
             }
 
             // ── Base spread (always visible — left and right pages with spine crease) ──
+            let baseReact = dragNorm * halfW * 0.04
             PaperSheetView(
                 width: spreadWidth,
                 height: spreadHeight,
@@ -1599,66 +1599,41 @@ struct PaperOpenBookView: View {
                 isTop: true,
                 darken: isFlipping ? 0.008 : 0
             )
+            .rotation3DEffect(
+                .degrees(Double(-dragNorm) * 2.5),
+                axis: (x: 0, y: 1, z: 0),
+                perspective: 0.25
+            )
             .shadow(color: Color.black.opacity(isFlipping ? 0.08 : 0.16), radius: isFlipping ? 8 : 14, x: 0, y: isFlipping ? 4 : 8)
+            .offset(x: baseReact)
 
-            // ── Fold shadow cast by turning half-page onto the base spread ──
-            if isFlipping && flipAngle > 1 && flipAngle < 179 {
-                let shadowAlpha = 0.18 * sinFlip
-                let shadowW = halfW * 0.08 + halfW * 0.14 * CGFloat(sinFlip)
-                let edgeX = halfW * 0.5 * CGFloat(cosFlip)
+            // ── Trailing follower pages + fold shadow + turning page ──
+            let leftHalfShape = UnevenRoundedRectangle(
+                topLeadingRadius: cornerRadius * 0.8,
+                bottomLeadingRadius: cornerRadius * 0.8,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 0
+            )
+            let isForward = forwardP > 0.001
+            let isBackward = backwardP > 0.001
+            // Forward: 0→180, Backward: 0→180 (own progress)
+            let turnAngle: Double = isForward
+                ? Double(forwardP) * 180
+                : Double(backwardP) * 180
 
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.clear, location: 0),
-                                .init(color: Color.black.opacity(shadowAlpha * 0.5), location: 0.25),
-                                .init(color: Color.black.opacity(shadowAlpha), location: 0.5),
-                                .init(color: Color.black.opacity(shadowAlpha * 0.3), location: 0.75),
-                                .init(color: Color.clear, location: 1)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: shadowW, height: spreadHeight * 0.94)
-                    .offset(x: edgeX)
-                    .blur(radius: 2 + 4 * CGFloat(sinFlip))
-                    .allowsHitTesting(false)
-            }
-
-            // ── The turning half-page (fans around the spine from right to left) ──
             if isFlipping {
-                let showBack = flipAngle > 90
+                let trailCount = isForward ? rightStack : leftStack
+                let trailFractions: [Double] = [0.35, 0.18, 0.08]
 
-                Group {
-                    if showBack {
-                        // Back of the page — slightly warmer/darker blank paper
-                        halfShape
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: "F0EEE8"), Color(hex: "E8E6E0")],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .overlay(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: Color.black.opacity(0.05), location: 0),
-                                        .init(color: Color.clear, location: 0.15),
-                                        .init(color: Color.clear, location: 0.85),
-                                        .init(color: Color.black.opacity(0.03), location: 1)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                .clipShape(halfShape)
-                            )
-                            .overlay(halfShape.stroke(Color.black.opacity(0.06), lineWidth: 0.5))
-                            .frame(width: halfW, height: spreadHeight)
-                    } else {
-                        // Front of the page — matches base spread paper
+                // ── Follower half-pages that trail the turning page ──
+                ForEach(0..<min(trailCount, 3), id: \.self) { i in
+                    let fraction = trailFractions[i]
+                    let followerAngle = turnAngle * fraction
+                    let depth = CGFloat(min(trailCount, 3) - i)
+                    let darken = Double(depth) * 0.014
+
+                    if isForward {
+                        // Right-half followers trail the forward turn
                         halfShape
                             .fill(
                                 LinearGradient(
@@ -1667,36 +1642,131 @@ struct PaperOpenBookView: View {
                                     endPoint: .bottom
                                 )
                             )
-                            .overlay(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: Color.black.opacity(0.06), location: 0),
-                                        .init(color: Color.clear, location: 0.12),
-                                        .init(color: Color.clear, location: 0.88),
-                                        .init(color: Color.black.opacity(0.04), location: 1)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                .clipShape(halfShape)
-                            )
-                            .overlay(halfShape.stroke(Color.black.opacity(0.08), lineWidth: 0.6))
+                            .overlay(Color.black.opacity(darken).clipShape(halfShape))
+                            .overlay(halfShape.stroke(Color.black.opacity(0.06), lineWidth: 0.4))
                             .frame(width: halfW, height: spreadHeight)
+                            .rotation3DEffect(
+                                .degrees(-followerAngle),
+                                axis: (x: 0, y: 1, z: 0),
+                                anchor: .leading,
+                                perspective: 0.35
+                            )
+                            .offset(x: halfW / 2)
+                    } else {
+                        // Left-half followers trail the backward turn
+                        leftHalfShape
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "F0EEE8"), Color(hex: "E8E6E0")],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .overlay(Color.black.opacity(darken).clipShape(leftHalfShape))
+                            .overlay(leftHalfShape.stroke(Color.black.opacity(0.06), lineWidth: 0.4))
+                            .frame(width: halfW, height: spreadHeight)
+                            .rotation3DEffect(
+                                .degrees(followerAngle),
+                                axis: (x: 0, y: 1, z: 0),
+                                anchor: .trailing,
+                                perspective: 0.35
+                            )
+                            .offset(x: -halfW / 2)
                     }
                 }
-                .rotation3DEffect(
-                    .degrees(-flipAngle),
-                    axis: (x: 0, y: 1, z: 0),
-                    anchor: .leading,
-                    perspective: 0.35
-                )
-                .offset(x: halfW / 2) // leading edge sits at spine (center)
-                .shadow(
-                    color: Color.black.opacity(0.12 * sinFlip),
-                    radius: 12,
-                    x: -8 * CGFloat(sinFlip),
-                    y: 3
-                )
+
+                // ── Fold shadow cast by turning half-page ──
+                let foldSinFlip = sin(turnAngle * .pi / 180)
+                let foldCosFlip = cos(turnAngle * .pi / 180)
+                if turnAngle > 1 && turnAngle < 179 {
+                    let shadowAlpha = 0.18 * foldSinFlip
+                    let shadowW = halfW * 0.08 + halfW * 0.14 * CGFloat(foldSinFlip)
+                    let edgeX = isForward
+                        ? halfW * 0.5 * CGFloat(foldCosFlip)
+                        : -halfW * 0.5 * CGFloat(foldCosFlip)
+
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.clear, location: 0),
+                                    .init(color: Color.black.opacity(shadowAlpha * 0.5), location: 0.25),
+                                    .init(color: Color.black.opacity(shadowAlpha), location: 0.5),
+                                    .init(color: Color.black.opacity(shadowAlpha * 0.3), location: 0.75),
+                                    .init(color: Color.clear, location: 1)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: shadowW, height: spreadHeight * 0.94)
+                        .offset(x: edgeX)
+                        .blur(radius: 2 + 4 * CGFloat(foldSinFlip))
+                        .allowsHitTesting(false)
+                }
+
+                // ── The main turning half-page ──
+                let showBack = turnAngle > 90
+
+                if isForward {
+                    // Forward: right-half page turns from right to left
+                    Group {
+                        if showBack {
+                            halfShape
+                                .fill(LinearGradient(colors: [Color(hex: "F0EEE8"), Color(hex: "E8E6E0")], startPoint: .top, endPoint: .bottom))
+                                .overlay(halfShape.stroke(Color.black.opacity(0.06), lineWidth: 0.5))
+                                .frame(width: halfW, height: spreadHeight)
+                        } else {
+                            halfShape
+                                .fill(LinearGradient(colors: [Color(hex: "F7F6F1"), Color(hex: "EEECE6")], startPoint: .top, endPoint: .bottom))
+                                .overlay(halfShape.stroke(Color.black.opacity(0.08), lineWidth: 0.6))
+                                .frame(width: halfW, height: spreadHeight)
+                        }
+                    }
+                    .rotation3DEffect(
+                        .degrees(-turnAngle),
+                        axis: (x: 0, y: 1, z: 0),
+                        anchor: .leading,
+                        perspective: 0.35
+                    )
+                    .offset(x: halfW / 2)
+                    .shadow(
+                        color: Color.black.opacity(0.12 * foldSinFlip),
+                        radius: 12,
+                        x: -8 * CGFloat(foldSinFlip),
+                        y: 3
+                    )
+                } else {
+                    // Backward: left-half page turns from left to right
+                    Group {
+                        if showBack {
+                            // Past 90°: front of the page revealed as it turns right
+                            leftHalfShape
+                                .fill(LinearGradient(colors: [Color(hex: "F7F6F1"), Color(hex: "EEECE6")], startPoint: .top, endPoint: .bottom))
+                                .overlay(leftHalfShape.stroke(Color.black.opacity(0.08), lineWidth: 0.6))
+                                .frame(width: halfW, height: spreadHeight)
+                        } else {
+                            // Before 90°: back of the page (was showing on the left)
+                            leftHalfShape
+                                .fill(LinearGradient(colors: [Color(hex: "F0EEE8"), Color(hex: "E8E6E0")], startPoint: .top, endPoint: .bottom))
+                                .overlay(leftHalfShape.stroke(Color.black.opacity(0.06), lineWidth: 0.5))
+                                .frame(width: halfW, height: spreadHeight)
+                        }
+                    }
+                    .rotation3DEffect(
+                        .degrees(turnAngle),
+                        axis: (x: 0, y: 1, z: 0),
+                        anchor: .trailing,
+                        perspective: 0.35
+                    )
+                    .offset(x: -halfW / 2)
+                    .shadow(
+                        color: Color.black.opacity(0.12 * foldSinFlip),
+                        radius: 12,
+                        x: 8 * CGFloat(foldSinFlip),
+                        y: 3
+                    )
+                }
             }
         }
         .frame(width: frameWidth, height: frameHeight, alignment: .center)
