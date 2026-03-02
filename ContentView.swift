@@ -1571,20 +1571,22 @@ struct PaperOpenBookView: View {
                 .offset(y: spreadHeight * 0.12)
                 .scaleEffect(x: 0.96, y: 0.92)
 
-            // ── Page stack (depth cue) ──
+            // ── Fanning page stack (full spreads, each wider than the one above) ──
             let stackCount = max(leftStack, rightStack)
             if stackCount > 0 {
-                ForEach(0..<min(stackCount, 3), id: \.self) { i in
-                    let depth = CGFloat(min(stackCount, 3) - i)
+                ForEach(0..<min(stackCount, 4), id: \.self) { i in
+                    let depth = CGFloat(min(stackCount, 4) - i)
+                    let extraW = depth * spreadWidth * 0.07
                     PaperSheetView(
-                        width: spreadWidth,
+                        width: spreadWidth + extraW,
                         height: spreadHeight,
                         cornerRadius: cornerRadius,
                         wave: wave,
                         isTop: false,
-                        darken: Double(depth) * 0.012
+                        darken: Double(depth) * 0.008
                     )
-                    .offset(y: depth * 1.5)
+                    .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
+                    .offset(y: depth * 1.2)
                 }
             }
 
@@ -1774,8 +1776,8 @@ struct BookItem: View {
                 let fullFlip = openBookW * 0.4
                 let totalPages = notebook.pages.count
                 let hasMultiplePages = totalPages > 1
-                let leftStack = hasMultiplePages ? min(3, max(1, currentPage)) : 0
-                let rightStack = hasMultiplePages ? min(3, max(1, totalPages - currentPage - 1)) : 0
+                let leftStack = hasMultiplePages ? min(4, max(1, currentPage)) : 0
+                let rightStack = hasMultiplePages ? min(4, max(1, totalPages - currentPage - 1)) : 0
 
                 PaperOpenBookView(
                     spreadWidth: spreadW,
