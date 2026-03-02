@@ -548,24 +548,34 @@ struct ContentView: View {
                         .gesture(
                             DragGesture(minimumDistance: 10)
                                 .onChanged { value in
-                                    pageDragOffset = value.translation.width
-                                }
-                                .onEnded { value in
-                                    let threshold: CGFloat = 50
-                                    let velocity = value.velocity.width
-                                    // Full flip distance — matches BookItem's openBookW * 0.4
                                     let screenW = min(geometry.size.width, geometry.size.height)
                                     let isIPadGesture = screenW > 500
                                     let gestureBookW = isIPadGesture ? screenW * 0.44 : screenW * 0.82
                                     let fullFlip = gestureBookW * 0.4
+                                    let dragLimit = fullFlip * 0.85
+                                    var t = Transaction()
+                                    t.disablesAnimations = true
+                                    withTransaction(t) {
+                                        pageDragOffset = max(-dragLimit, min(dragLimit, value.translation.width))
+                                    }
+                                }
+                                .onEnded { value in
+                                    let threshold: CGFloat = 50
+                                    let velocity = value.velocity.width
+                                    let screenW = min(geometry.size.width, geometry.size.height)
+                                    let isIPadGesture = screenW > 500
+                                    let gestureBookW = isIPadGesture ? screenW * 0.44 : screenW * 0.82
+                                    let fullFlip = gestureBookW * 0.4
+                                    let currentOffset = pageDragOffset
 
-                                    if pageDragOffset < -threshold || velocity < -250 {
-                                        // Swipe left → turn forward (3D page flip)
+                                    if currentOffset < -threshold || velocity < -250 {
+                                        // Swipe left → turn forward
                                         if currentPage < notebooks[openIndex].pages.count - 1 {
-                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                                            let duration = 0.35 * Double(abs(-fullFlip - currentOffset) / fullFlip)
+                                            withAnimation(.easeOut(duration: max(0.15, duration))) {
                                                 pageDragOffset = -fullFlip
                                             }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.15, duration) + 0.05) {
                                                 var t = Transaction()
                                                 t.disablesAnimations = true
                                                 withTransaction(t) {
@@ -574,17 +584,18 @@ struct ContentView: View {
                                                 }
                                             }
                                         } else {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                            withAnimation(.easeOut(duration: 0.25)) {
                                                 pageDragOffset = 0
                                             }
                                         }
-                                    } else if pageDragOffset > threshold || velocity > 250 {
-                                        // Swipe right → turn backward (3D page flip)
+                                    } else if currentOffset > threshold || velocity > 250 {
+                                        // Swipe right → turn backward
                                         if currentPage > 0 {
-                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                                            let duration = 0.35 * Double(abs(fullFlip - currentOffset) / fullFlip)
+                                            withAnimation(.easeOut(duration: max(0.15, duration))) {
                                                 pageDragOffset = fullFlip
                                             }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + max(0.15, duration) + 0.05) {
                                                 var t = Transaction()
                                                 t.disablesAnimations = true
                                                 withTransaction(t) {
@@ -593,13 +604,14 @@ struct ContentView: View {
                                                 }
                                             }
                                         } else {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                            withAnimation(.easeOut(duration: 0.25)) {
                                                 pageDragOffset = 0
                                             }
                                         }
                                     } else {
                                         // Snap back
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                        let snapDuration = 0.25 * Double(abs(currentOffset) / threshold)
+                                        withAnimation(.easeOut(duration: max(0.12, snapDuration))) {
                                             pageDragOffset = 0
                                         }
                                     }
@@ -1529,7 +1541,7 @@ struct PaperOpenBookView: View {
     var body: some View {
         let halfW = spreadWidth / 2
         let cornerRadius = spreadHeight * 0.12
-        let wave = spreadHeight * 0.02
+        let wave = spreadHeight * 0.045
         let clampedDrag = max(-fullFlip, min(fullFlip, dragOffset))
 
         // Forward flip (swipe left): drag < 0, progress 0→1
@@ -1548,6 +1560,12 @@ struct PaperOpenBookView: View {
             bottomTrailingRadius: cornerRadius * 0.8,
             topTrailingRadius: cornerRadius * 0.8
         )
+        let leftHalfShape = UnevenRoundedRectangle(
+            topLeadingRadius: cornerRadius * 0.8,
+            bottomLeadingRadius: cornerRadius * 0.8,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 0
+        )
 
         ZStack {
             // ── Ambient shadow beneath the book ──
@@ -1558,34 +1576,77 @@ struct PaperOpenBookView: View {
                 .offset(y: spreadHeight * 0.12)
                 .scaleEffect(x: 0.96, y: 0.92)
 
-            // ── Fanning page stack (full spreads, each wider than the one above) ──
+            // ── Fanning page stack (split half-pages per side, tracks current page) ──
             // Normalized drag progress: –1 (full forward) to +1 (full backward)
             let dragNorm: CGFloat = fullFlip > 0 ? clampedDrag / fullFlip : 0
-            let stackCount = max(leftStack, rightStack)
-            if stackCount > 0 {
-                ForEach(0..<min(stackCount, 4), id: \.self) { i in
-                    let depth = CGFloat(min(stackCount, 4) - i)
-                    let extraW = depth * spreadWidth * 0.11
-                    // Exponential falloff: shallow pages react more, deep pages barely budge
-                    let reactivity = pow(0.45, depth - 1) // 1.0, 0.45, 0.20, 0.09
-                    let pageShiftX = dragNorm * halfW * 0.08 * reactivity
-                    let pageTiltY = Double(-dragNorm) * 6.0 * Double(reactivity)
+            let absDrag = abs(dragNorm)
+            let fanDecay: CGFloat = 0.4
 
-                    PaperSheetView(
-                        width: spreadWidth + extraW,
-                        height: spreadHeight,
-                        cornerRadius: cornerRadius,
-                        wave: wave,
-                        isTop: false,
-                        darken: Double(depth) * 0.010
-                    )
-                    .rotation3DEffect(
-                        .degrees(pageTiltY),
-                        axis: (x: 0, y: 1, z: 0),
-                        perspective: 0.25
-                    )
-                    .shadow(color: Color.black.opacity(0.05), radius: 3, x: 0, y: 2)
-                    .offset(x: pageShiftX, y: depth * 3.5)
+            // Left half-page stack
+            if leftStack > 0 {
+                let sideBoost: CGFloat = dragNorm > 0 ? absDrag * 0.7 : 0
+                ForEach(0..<min(leftStack, 4), id: \.self) { i in
+                    let depth = CGFloat(min(leftStack, 4) - i)
+                    let shallow: CGFloat = depth <= 2 ? 1.0 + sideBoost : 1.0
+                    let gapY = 8.0 * shallow * (1.0 - pow(fanDecay, depth)) / (1.0 - fanDecay)
+                    let extraW = halfW * 0.16 * shallow * (1.0 - pow(0.45, depth)) / 0.55
+                    let reactivity = pow(0.45, depth - 1)
+                    let tiltAngle = Double(max(0, dragNorm)) * 10.0 * Double(reactivity)
+                    let darken = Double(depth) * 0.012
+
+                    leftHalfShape
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "F0EEE8"), Color(hex: "E8E6E0")],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay(Color.black.opacity(darken).clipShape(leftHalfShape))
+                        .overlay(leftHalfShape.stroke(Color.black.opacity(0.05), lineWidth: 0.4))
+                        .frame(width: halfW + extraW, height: spreadHeight)
+                        .rotation3DEffect(
+                            .degrees(tiltAngle),
+                            axis: (x: 0, y: 1, z: 0),
+                            anchor: .trailing,
+                            perspective: 0.3
+                        )
+                        .shadow(color: Color.black.opacity(0.04), radius: 2, x: -1, y: 2)
+                        .offset(x: -(halfW + extraW) / 2, y: gapY)
+                }
+            }
+
+            // Right half-page stack
+            if rightStack > 0 {
+                let sideBoost: CGFloat = dragNorm < 0 ? absDrag * 0.7 : 0
+                ForEach(0..<min(rightStack, 4), id: \.self) { i in
+                    let depth = CGFloat(min(rightStack, 4) - i)
+                    let shallow: CGFloat = depth <= 2 ? 1.0 + sideBoost : 1.0
+                    let gapY = 8.0 * shallow * (1.0 - pow(fanDecay, depth)) / (1.0 - fanDecay)
+                    let extraW = halfW * 0.16 * shallow * (1.0 - pow(0.45, depth)) / 0.55
+                    let reactivity = pow(0.45, depth - 1)
+                    let tiltAngle = Double(max(0, -dragNorm)) * 10.0 * Double(reactivity)
+                    let darken = Double(depth) * 0.012
+
+                    halfShape
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "F7F6F1"), Color(hex: "EEECE6")],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay(Color.black.opacity(darken).clipShape(halfShape))
+                        .overlay(halfShape.stroke(Color.black.opacity(0.05), lineWidth: 0.4))
+                        .frame(width: halfW + extraW, height: spreadHeight)
+                        .rotation3DEffect(
+                            .degrees(-tiltAngle),
+                            axis: (x: 0, y: 1, z: 0),
+                            anchor: .leading,
+                            perspective: 0.3
+                        )
+                        .shadow(color: Color.black.opacity(0.04), radius: 2, x: 1, y: 2)
+                        .offset(x: (halfW + extraW) / 2, y: gapY)
                 }
             }
 
@@ -1608,14 +1669,8 @@ struct PaperOpenBookView: View {
             .offset(x: baseReact)
 
             // ── Trailing follower pages + fold shadow + turning page ──
-            let leftHalfShape = UnevenRoundedRectangle(
-                topLeadingRadius: cornerRadius * 0.8,
-                bottomLeadingRadius: cornerRadius * 0.8,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 0
-            )
             let isForward = forwardP > 0.001
-            let isBackward = backwardP > 0.001
+            let _ = backwardP > 0.001
             // Forward: 0→180, Backward: 0→180 (own progress)
             let turnAngle: Double = isForward
                 ? Double(forwardP) * 180
@@ -1707,6 +1762,10 @@ struct PaperOpenBookView: View {
 
                 // ── The main turning half-page ──
                 let showBack = turnAngle > 90
+                // Fade out near 0° and 180° so the instant reset is invisible
+                let edgeFade: Double = turnAngle < 8
+                    ? turnAngle / 8.0
+                    : (turnAngle > 172 ? (180.0 - turnAngle) / 8.0 : 1.0)
 
                 if isForward {
                     // Forward: right-half page turns from right to left
@@ -1723,6 +1782,7 @@ struct PaperOpenBookView: View {
                                 .frame(width: halfW, height: spreadHeight)
                         }
                     }
+                    .opacity(edgeFade)
                     .rotation3DEffect(
                         .degrees(-turnAngle),
                         axis: (x: 0, y: 1, z: 0),
@@ -1731,7 +1791,7 @@ struct PaperOpenBookView: View {
                     )
                     .offset(x: halfW / 2)
                     .shadow(
-                        color: Color.black.opacity(0.12 * foldSinFlip),
+                        color: Color.black.opacity(0.12 * foldSinFlip * edgeFade),
                         radius: 12,
                         x: -8 * CGFloat(foldSinFlip),
                         y: 3
@@ -1740,19 +1800,18 @@ struct PaperOpenBookView: View {
                     // Backward: left-half page turns from left to right
                     Group {
                         if showBack {
-                            // Past 90°: front of the page revealed as it turns right
                             leftHalfShape
                                 .fill(LinearGradient(colors: [Color(hex: "F7F6F1"), Color(hex: "EEECE6")], startPoint: .top, endPoint: .bottom))
                                 .overlay(leftHalfShape.stroke(Color.black.opacity(0.08), lineWidth: 0.6))
                                 .frame(width: halfW, height: spreadHeight)
                         } else {
-                            // Before 90°: back of the page (was showing on the left)
                             leftHalfShape
                                 .fill(LinearGradient(colors: [Color(hex: "F0EEE8"), Color(hex: "E8E6E0")], startPoint: .top, endPoint: .bottom))
                                 .overlay(leftHalfShape.stroke(Color.black.opacity(0.06), lineWidth: 0.5))
                                 .frame(width: halfW, height: spreadHeight)
                         }
                     }
+                    .opacity(edgeFade)
                     .rotation3DEffect(
                         .degrees(turnAngle),
                         axis: (x: 0, y: 1, z: 0),
@@ -1761,7 +1820,7 @@ struct PaperOpenBookView: View {
                     )
                     .offset(x: -halfW / 2)
                     .shadow(
-                        color: Color.black.opacity(0.12 * foldSinFlip),
+                        color: Color.black.opacity(0.12 * foldSinFlip * edgeFade),
                         radius: 12,
                         x: 8 * CGFloat(foldSinFlip),
                         y: 3
@@ -1939,7 +1998,6 @@ struct BookItem: View {
         )
         .opacity(dropProgress < 0.01 ? 0 : 1)
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: openProgress)
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: pageDragOffset)
         .animation(.spring(response: 0.35, dampingFraction: 0.5), value: jump)
         .animation(.spring(response: 0.6, dampingFraction: 0.72), value: turn)
     }
