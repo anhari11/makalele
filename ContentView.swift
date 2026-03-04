@@ -6,6 +6,56 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+
+// MARK: - Haptics
+
+#if canImport(UIKit)
+/// Shared haptic generators — created once, prepared early so the first
+/// impactOccurred() doesn't hitch the Taptic Engine init.
+enum Haptics {
+    static let medium = UIImpactFeedbackGenerator(style: .medium)
+    static let heavy  = UIImpactFeedbackGenerator(style: .heavy)
+
+    /// Call once after launch animations settle (~0.7 s).
+    /// .prepare() is lightweight (~10 ms) — just wakes the Taptic Engine.
+    static func prepareAll() {
+        medium.prepare()
+        heavy.prepare()
+    }
+}
+#endif
+
+// MARK: - Keyboard Pre-warmer
+
+#if canImport(UIKit)
+/// Invisible UITextField with empty inputView (no keyboard shown).
+/// Briefly becomes first responder after a delay to warm the text input
+/// hosting layer, so the real TextField's first focus is instant.
+struct TextInputWarmer: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView(frame: .zero)
+        container.isUserInteractionEnabled = false
+        let tf = UITextField(frame: .zero)
+        tf.inputView = UIView()          // empty → no visible keyboard
+        tf.autocorrectionType = .no
+        tf.alpha = 0
+        container.addSubview(tf)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            tf.becomeFirstResponder()
+            DispatchQueue.main.async {
+                tf.resignFirstResponder()
+            }
+        }
+        return container
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
+#endif
 
 // MARK: - Models
 
@@ -32,7 +82,7 @@ struct Notebook: Identifiable {
 
 struct ContentView: View {
     @State private var notebooks: [Notebook] = [
-        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "5A7A8A"), spineColor: Color(hex: "4A6878"), pageEdgeColor: Color(hex: "C8CDD0"), hasCoverArt: false, textureURL: "", creationDate: {
+        Notebook(title: "Maldives 2025 🌴", pages: (0..<24).map { _ in Page(text: "") }, coverColor: Color(hex: "ffdff4"), spineColor: Color(hex: "c4a0b8"), pageEdgeColor: Color(hex: "f0d0e4"), hasCoverArt: true, textureURL: "ibiza", creationDate: {
             var c = DateComponents(); c.year = 2025; c.month = 3; c.day = 14
             return Calendar.current.date(from: c)!
         }()),
@@ -54,7 +104,8 @@ struct ContentView: View {
     @State private var bookTurn: CGFloat = 0
     @State private var currentPage: Int = 0
     @State private var flipProgress: CGFloat = 0
-    @State private var showFullBook: Bool = false
+    @State private var pageDragOffset: CGFloat = 0
+    @State private var bookRotation: CGFloat = 0
     @State private var newBookDrop: CGFloat = 1
     @State private var droppingBookIndex: Int? = nil
     @State private var isAddingBook: Bool = false
@@ -64,7 +115,9 @@ struct ContentView: View {
     @State private var cursorTimer: Timer? = nil
     @State private var entranceSlide: CGFloat = 1500
     @State private var hasAppeared: Bool = false
-    @FocusState private var isTitleFieldFocused: Bool
+    @State private var shimmerPhase: CGFloat = -1
+    @State private var aboveCarouselHeight: CGFloat = 0
+@FocusState private var isTitleFieldFocused: Bool
 
     private func formattedCreationDate(for date: Date) -> String {
         let formatter = DateFormatter()
@@ -103,155 +156,141 @@ struct ContentView: View {
             ZStack {
                 Color.white
                     .ignoresSafeArea()
+                    .onTapGesture {
+                        if isNamingNewBook {
+                            finishNaming()
+                        }
+                    }
 
-                // Background overlay: book color when opening
-                if let openIndex = openBookIndex {
-                    notebooks[openIndex].coverColor
-                        .opacity(Double(openBookProgress))
-                        .ignoresSafeArea()
-                        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
-                }
+                // Background stays white when opening
 
                 VStack(spacing: 0) {
+                    let dismissProgress = min(1, CGFloat(openBookProgress) * 2.5)
 
-                    // Top navigation bar
+                    // ── Above-carousel elements (slide UP when opening) ──
+                    VStack(spacing: 0) {
+
+                    Spacer().frame(height: geometry.safeAreaInsets.top + 4)
+
                     HStack {
+                        // Hamburger menu
                         Button(action: {}) {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 22, weight: .medium))
-                                .foregroundColor(uiColor)
-                        }
-                        Spacer()
-
-                      //  HStack {
-                        //    Text("Private")
-                          //      .fontWeight(.bold)
-                            //    .foregroundStyle(uiColor)
-                            //Image(systemName: "chevron.down")
-                              //  .foregroundColor(uiColor)
-                                //.fontWeight(.semibold)
-                        //}
-                        //.padding(.vertical, 5)
-                        //.padding(.horizontal, 20)
-                        //.background(uiBgColor)
-
-                        HStack(spacing: 3) {
-                            Image("profile")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 19, height: 19)
-                                .clipShape(Circle())
-                                .opacity(1 - Double(openBookProgress) * 0.5)
-
-                            Text("aanhari")
-                                .foregroundStyle(Color.black)
-                                .fontWeight(.bold)
-                            
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(Color(hex: "#898988"))
-                                .fontWeight(.bold)
-                        }
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 50)
-                    
-                    ZStack {
-                        // Centered: title + ellipsis
-                        HStack(spacing: 4) {
-                            ZStack {
-                                // Always-present TextField (avoids first-keyboard lag)
-                                TextField("", text: $newBookTitle)
-                                    .font(.system(size: 17, weight: .bold))
-                                    .foregroundColor(.black)
-                                    .multilineTextAlignment(.center)
-                                    .tint(.clear)
-                                    .focused($isTitleFieldFocused)
-                                    .onSubmit { finishNaming() }
-                                    .opacity(isNamingNewBook ? 1 : 0)
-                                    .allowsHitTesting(isNamingNewBook)
-
-                                if isNamingNewBook && newBookTitle.isEmpty {
-                                    HStack(spacing: 0) {
-                                        Text("Untitled")
-                                            .font(.system(size: 17, weight: .bold))
-                                            .foregroundColor(.gray.opacity(0.5))
-                                        Rectangle()
-                                            .fill(Color.black)
-                                            .frame(width: 2, height: 20)
-                                            .opacity(cursorVisible ? 1 : 0)
-                                    }
-                                    .allowsHitTesting(false)
-                                }
-
-                                if !isNamingNewBook {
-                                    Text(notebooks[selectedIndex].title)
-                                        .font(.system(size: 17, weight: .bold))
-                                        .foregroundColor(.black)
+                            VStack(spacing: 5) {
+                                ForEach(0..<3, id: \.self) { _ in
+                                    RoundedRectangle(cornerRadius: 1)
+                                        .fill(Color(hex: "3D3D3D"))
+                                        .frame(width: 22, height: 2)
                                 }
                             }
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 14)
-                            .background(Color(hex: "EFEFEF"))
-                            .fixedSize()
-                            Button(action: {}) {
-                                HStack(spacing: 6) {   // 👈 control spacing here
-                                    Circle()
-                                        .frame(width: 5, height: 5)
-                                    Circle()
-                                        .frame(width: 5, height: 5)
-                                    Circle()
-                                        .frame(width: 5, height: 5)
-                                }
-                                .foregroundStyle(.black)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 13.5
-                            )
-                            .background(Color(hex: "EFEFEF"))
-                           
                         }
-                        .offset(x: dragOffset)
+                        .buttonStyle(.plain)
 
-                        // Right-aligned: Make a new album (iPad only)
+                        Spacer()
+
                         if isIPad {
-                            HStack {
-                                Spacer()
-                                Button(action: { addNewAlbum() }) {
-                                    HStack(alignment: .center, spacing: 6) {
-                                        Image("new2")
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 75, height: 75)
-                                            .clipShape(Circle())
-                                            .opacity(1 - Double(openBookProgress) * 0.5)
+                            Button(action: { addNewAlbum() }) {
+                                HStack(alignment: .center, spacing: 6) {
+                                    Image("bag")
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 62, height: 62)
+                                        .clipShape(Circle())
+                                        .opacity(1 - Double(openBookProgress) * 0.5)
 
-                                        Text("Make a new album")
-                                            .foregroundStyle(Color.black)
-                                            .fontWeight(.bold)
-                                            .font(.system(size: 17))
+                                    Text("Buy it now")
+                                        .foregroundStyle(Color.black)
+                                        .fontWeight(.bold)
+                                        .font(.system(size: 17))
 
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 17, weight: .bold))
-                                            .foregroundColor(Color(hex: "#898988"))
-                                    }
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 17, weight: .bold))
+                                        .foregroundColor(Color(hex: "#898988"))
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .buttonStyle(.plain)
+
+                            Spacer()
                         }
+
+                        // Profile image
+                        Button(action: {}) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(Color(hex: "C7C7CC"))
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+
+                    // Divider below title
+                    Rectangle()
+                        .fill(Color(hex: "E0E0E0"))
+                        .frame(height: 0.5)
+                        .padding(.bottom, 16)
+
+                    Spacer().frame(height: geometry.size.height * 0.10 - 70)
+
+                    // Book title + chevron
+                    HStack(spacing: 3) {
+                        ZStack {
+                            TextField("", text: $newBookTitle)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.black)
+                                .multilineTextAlignment(.center)
+                                .tint(.clear)
+                                .focused($isTitleFieldFocused)
+                                .onSubmit { finishNaming() }
+                                .opacity(isNamingNewBook ? 1 : 0)
+                                .allowsHitTesting(isNamingNewBook)
+
+                            if isNamingNewBook && newBookTitle.isEmpty {
+                                HStack(spacing: 0) {
+                                    Text("Untitled")
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.gray.opacity(0.5))
+                                    Rectangle()
+                                        .fill(Color.black)
+                                        .frame(width: 2, height: 20)
+                                        .opacity(cursorVisible ? 1 : 0)
+                                }
+                                .allowsHitTesting(false)
+                            }
+
+                            if !isNamingNewBook {
+                                Text(notebooks[selectedIndex].title)
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundColor(.black)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .background(Color(hex: "EFEFEF"))
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 6, bottomTrailingRadius: 0, topTrailingRadius: 0))
+                        .fixedSize()
+                        Button(action: {}) {
+                            HStack(spacing: 0) {
+                                Image(systemName: "chevron.down")
+                                    .foregroundStyle(Color.white)
+                                    .fontWeight(.bold)
+                                    .font(.system(size: 20, weight: .bold))
+                            }
+                        }
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 14)
+                        .background(Color(hex: "#0e89fc"))
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
+                    }
+                    .scaleEffect(isNamingNewBook ? 1.25 : 1.0)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isNamingNewBook)
+                    .offset(x: dragOffset)
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
                     .padding(.bottom, 40)
 
                     // Aanhari x and Share with friends
                     Group {
-                        if min(geometry.size.width, geometry.size.height) > 500 {
+                        if isIPad {
                             HStack {
                                 Button(action: {}) {
                                     HStack(spacing: 2) {
@@ -277,7 +316,7 @@ struct ContentView: View {
                                     Text("Share with friends")
                                         .foregroundStyle(uiColor)
                                         .fontWeight(.bold)
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(size: 17, weight: .bold))
                                     Image(systemName: "chevron.right")
                                         .foregroundStyle(uiColor)
                                         .font(.system(size: 14, weight: .semibold))
@@ -304,14 +343,14 @@ struct ContentView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "person.2.fill")
                                         .foregroundStyle(uiColor)
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(size: 17, weight: .semibold))
                                     Text("Share with friends")
                                         .foregroundStyle(uiColor)
                                         .fontWeight(.bold)
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.system(size: 17, weight: .bold))
                                     Image(systemName: "chevron.right")
                                         .foregroundStyle(uiColor)
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(.system(size: 15, weight: .semibold))
                                 }
                             }
                         }
@@ -320,30 +359,51 @@ struct ContentView: View {
                     .animation(.smooth(duration: 0.5), value: selectedIndex)
                     .animation(.smooth(duration: 0.15), value: dragOffset)
                     .zIndex(2)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, isIPad ? 9 : -16)
+                    }
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.onAppear { aboveCarouselHeight = proxy.size.height }
+                        }
+                    )
+                    .offset(y: -geometry.size.height * 0.5 * dismissProgress)
+                    .opacity(Double(1 - dismissProgress))
+                    .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
                     // Notebook Carousel
                     BookCarousel(
-                        notebooks: notebooks,
-                        selectedIndex: $selectedIndex,
-                        dragOffset: $dragOffset,
-                        screenWidth: min(geometry.size.width, geometry.size.height),
-                        openBookIndex: openBookIndex,
-                        openBookProgress: openBookProgress,
-                        bookJump: bookJump,
-                        bookTurn: bookTurn,
-                        onBookTap: { index in
-                            handleBookTap(index: index)
-                        },
-                        newBookDrop: newBookDrop,
-                        droppingBookIndex: droppingBookIndex,
-                        entranceSlide: entranceSlide
-                    )
+                            notebooks: notebooks,
+                            selectedIndex: $selectedIndex,
+                            dragOffset: $dragOffset,
+                            screenWidth: min(geometry.size.width, geometry.size.height),
+                            openBookIndex: openBookIndex,
+                            openBookProgress: openBookProgress,
+                            bookJump: bookJump,
+                            bookTurn: bookTurn,
+                            onBookTap: { index in
+                                handleBookTap(index: index)
+                            },
+                            currentPage: $currentPage,
+                            pageDragOffset: pageDragOffset,
+                            bookRotation: bookRotation,
+                            newBookDrop: newBookDrop,
+                            droppingBookIndex: droppingBookIndex,
+                            entranceSlide: entranceSlide
+                        )
                     .frame(height: isIPad ? 575 : 450)
+                    .offset(y: {
+                        guard openBookIndex != nil else { return CGFloat(0) }
+                        let carouselH: CGFloat = isIPad ? 575 : 450
+                        let carouselTopInContent = aboveCarouselHeight - geometry.safeAreaInsets.top
+                        let carouselCenterInContent = carouselTopInContent + carouselH / 2
+                        let screenCenter = geometry.size.height / 2
+                        let offset = screenCenter - carouselCenterInContent
+                        return offset * min(1, CGFloat(openBookProgress) * 2)
+                    }())
+                    .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
                     .onAppear {
                         if !hasAppeared {
                             hasAppeared = true
-                            // Snap to just past screen edge (invisible, keeps books in render tree)
                             entranceSlide = geometry.size.width
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                 withAnimation(.easeOut(duration: 0.5)) {
@@ -403,67 +463,218 @@ struct ContentView: View {
 
                     Spacer()
 
-                    // Make a new album (mobile only, at bottom)
-                    if !isIPad {
-                        Button(action: { addNewAlbum() }) {
-                            HStack(alignment: .center, spacing: 6) {
-                                Spacer()
-                                Image("new2")
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 75, height: 75)
-                                    .clipShape(Circle())
-                                    .opacity(1 - Double(openBookProgress) * 0.5)
-
-                                Text("Make a new album")
-                                    .foregroundStyle(Color.black)
-                                    .fontWeight(.bold)
-                                    .font(.system(size: 17))
-
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 17, weight: .bold))
-                                    .foregroundColor(Color(hex: "#898988"))
-                                Spacer()
+                    // Bottom action buttons
+                    if isIPad {
+                        VStack(spacing: 0) {
+                            // Export row
+                            Button(action: {}) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 17, weight: .regular))
+                                        .foregroundStyle(uiColor)
+                                        .frame(width: 28)
+                                    Text("Export Album")
+                                        .foregroundStyle(Color.black)
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#C7C7CC"))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 13)
                             }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.leading, 56)
+
+                            // New book row
+                            Button(action: { addNewAlbum() }) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 17, weight: .regular))
+                                        .foregroundStyle(uiColor)
+                                        .frame(width: 28)
+                                    Text("New Album")
+                                        .foregroundStyle(Color.black)
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Color(hex: "#C7C7CC"))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 13)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.leading, 56)
+
+                            // Delete row
+                            Button(action: {}) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 17, weight: .regular))
+                                        .foregroundStyle(.red)
+                                        .frame(width: 28)
+                                    Text("Delete Album")
+                                        .foregroundStyle(.red)
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 13)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 16)
+                        .background(Color(hex: "F2F2F7"))
+                        .cornerRadius(12)
+                        .frame(width: min(geometry.size.width, geometry.size.height) * 0.48)
                         .padding(.bottom, 16)
                     }
                 }
-                .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
+                .scaleEffect(isNamingNewBook ? 1.15 : 1.0, anchor: UnitPoint(x: 0.5, y: 0.13))
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isNamingNewBook)
                 .allowsHitTesting(openBookIndex == nil)
-                
-           
+                .ignoresSafeArea(.container, edges: .top)
 
-
-                // Tap anywhere to close the open book
-                if openBookIndex != nil && !showFullBook {
+                // Tap to close / drag to turn pages
+                if let openIndex = openBookIndex {
                     Color.clear
                         .contentShape(Rectangle())
                         .ignoresSafeArea()
+                        .gesture(
+                            DragGesture(minimumDistance: 20)
+                                .onChanged { value in
+                                    pageDragOffset = value.translation.width
+                                }
+                                .onEnded { value in
+                                    let threshold: CGFloat = 50
+                                    let velocity = value.velocity.width
+                                    let screenW = min(geometry.size.width, geometry.size.height)
+                                    let isIPadG = screenW > 500
+                                    let fullFlip = (isIPadG ? screenW * 0.80 : screenW * 0.94) * 0.4
+
+                                    if pageDragOffset < -threshold || velocity < -250 {
+                                        // Swipe left → turn forward
+                                        if currentPage < notebooks[openIndex].pages.count - 1 {
+                                            withAnimation(.easeOut(duration: 0.25)) {
+                                                pageDragOffset = -fullFlip
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                                currentPage += 1
+                                                pageDragOffset = 0
+                                            }
+                                        } else {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                                pageDragOffset = 0
+                                            }
+                                        }
+                                    } else if pageDragOffset > threshold || velocity > 250 {
+                                        // Swipe right → turn backward
+                                        if currentPage > 0 {
+                                            withAnimation(.easeOut(duration: 0.25)) {
+                                                pageDragOffset = fullFlip
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                                currentPage -= 1
+                                                pageDragOffset = 0
+                                            }
+                                        } else {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                                pageDragOffset = 0
+                                            }
+                                        }
+                                    } else {
+                                        // Snap back
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                            pageDragOffset = 0
+                                        }
+                                    }
+                                }
+                        )
                         .onTapGesture {
                             closeOpenBook()
                         }
                         .zIndex(4)
                 }
-                
-              
-                // Full open book view
-                if let openIndex = openBookIndex, showFullBook {
-                    CarouselBookView(
-                        notebook: $notebooks[openIndex],
-                        coverColor: notebooks[openIndex].coverColor,
-                        spineColor: notebooks[openIndex].spineColor,
-                        onClose: { closeOpenBook() }
-                    )
-                    .transition(.opacity)
-                    .zIndex(5)
+
+                // Make a new album – bottom left
+                VStack {
+                    Spacer()
+                    HStack(alignment: .center) {
+                        Button(action: {}) {
+                            HStack(alignment: .center, spacing: 8) {
+                                Image("bag")
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 30, height: 30)
+
+                                Text("Get printed book")
+                                    .fontWeight(.bold)
+                                    .font(.system(size: 17))
+                                    .overlay(
+                                        GeometryReader { geo in
+                                            LinearGradient(
+                                                stops: [
+                                                    .init(color: Color.clear, location: 0.0),
+                                                    .init(color: Color.clear, location: 0.3),
+                                                    .init(color: Color.white.opacity(0.7), location: 0.5),
+                                                    .init(color: Color.clear, location: 0.7),
+                                                    .init(color: Color.clear, location: 1.0)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                            .frame(width: geo.size.width * 3)
+                                            .offset(x: geo.size.width * shimmerPhase * 1.5)
+                                        }
+                                        .mask(
+                                            Text("Get printed book")
+                                                .fontWeight(.bold)
+                                                .font(.system(size: 17))
+                                        )
+                                    )
+                                    .foregroundStyle(Color(hex: "3D3D3D"))
+                                    .onAppear {
+                                        withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: false)) {
+                                            shimmerPhase = 1
+                                        }
+                                    }
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundColor(Color(hex: "#898988"))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                        Button(action: { addNewAlbum() }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.black)
+                                    .frame(width: 50, height: 50)
+                                Image(systemName: "plus")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
                 }
+                .ignoresSafeArea(.container, edges: .bottom)
+                .offset(y: geometry.size.height * 0.5 * min(1, CGFloat(openBookProgress) * 2.5))
+                .opacity(Double(1 - min(1, CGFloat(openBookProgress) * 2.5)))
+                .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
             }
-        }
+            }
         .ignoresSafeArea(.keyboard)
+        #if canImport(UIKit)
+        .background(TextInputWarmer().frame(width: 0, height: 0))
+        #endif
     }
 
     private func handleBookTap(index: Int) {
@@ -483,78 +694,41 @@ struct ContentView: View {
         openBookProgress = 0
         bookJump = 0
         bookTurn = 0
+        bookRotation = 0
+        currentPage = 0
 
-        // Phase 1: Jump up
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-            bookJump = 1
+        // Phase 1: Tilt book forward to lay flat
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.88)) {
+            openBookProgress = 0.5
         }
 
-        // Phase 2: Turn the book so right side recedes
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
-                bookTurn = 1
-            }
-        }
-
-        // Phase 3: Open the cover
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
+        // Phase 2: Open the cover/lid to reveal pages
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            withAnimation(.spring(response: 0.65, dampingFraction: 0.82)) {
                 openBookProgress = 1
-                bookJump = 0
-            }
-        }
-
-        // Phase 4: Show full open book view
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
-            if openBookProgress == 1 && openBookIndex == index {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    showFullBook = true
-                }
             }
         }
     }
 
     private func closeOpenBook() {
         guard openBookIndex != nil else { return }
-
-        if showFullBook {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                showFullBook = false
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                performCoverCloseAnimation()
-            }
-        } else {
-            performCoverCloseAnimation()
-        }
+        performCoverCloseAnimation()
     }
 
     private func performCoverCloseAnimation() {
-        // Phase 1: Close the cover
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            openBookProgress = 0
+        pageDragOffset = 0
+        // Phase 1: Close the lid
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            openBookProgress = 0.5
         }
-
-        // Phase 2: Turn back to face forward
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                bookTurn = 0
-            }
-        }
-
-        // Phase 3: Bounce — jump up then land with springy settle
+        // Phase 2: Tilt back upright
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.4)) {
-                bookJump = 1
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
-                    bookJump = 0
-                }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                openBookProgress = 0
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
             if openBookProgress == 0 {
                 openBookIndex = nil
             }
@@ -604,23 +778,27 @@ struct ContentView: View {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 #if canImport(UIKit)
-                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                Haptics.heavy.impactOccurred()
                 #endif
                 droppingBookIndex = nil
             }
         }
 
-        // Phase 3: Show keyboard after bounce fully settles
+        // Phase 3: Show naming UI after bounce settles, then focus
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
             isAddingBook = false
             isNamingNewBook = true
-            isTitleFieldFocused = true
             cursorVisible = true
             cursorTimer?.invalidate()
             cursorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
                 DispatchQueue.main.async {
                     cursorVisible.toggle()
                 }
+            }
+            // Focus on next render pass — naming UI (cursor + placeholder)
+            // appears instantly, keyboard follows right after.
+            DispatchQueue.main.async {
+                self.isTitleFieldFocused = true
             }
         }
     }
@@ -729,6 +907,22 @@ struct CircleButton<Content: View>: View {
     }
 }
 
+// MARK: - Blur View (UIKit backdrop blur)
+
+#if canImport(UIKit)
+struct BlurView: UIViewRepresentable {
+    var style: UIBlurEffect.Style
+
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        UIVisualEffectView(effect: UIBlurEffect(style: style))
+    }
+
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
+        uiView.effect = UIBlurEffect(style: style)
+    }
+}
+#endif
+
 // MARK: - Diagonal Shadow Shape
 
 struct DiagonalShadowShape: Shape {
@@ -773,6 +967,24 @@ struct BookFloorShadow: Shape {
     }
 }
 
+// MARK: - Notch Line Shape
+
+struct NotchLine: Shape {
+    let notchWidth: CGFloat
+    let notchHeight: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let midX = rect.midX
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: midX - notchWidth / 2, y: 0))
+        path.addLine(to: CGPoint(x: midX, y: notchHeight))
+        path.addLine(to: CGPoint(x: midX + notchWidth / 2, y: 0))
+        path.addLine(to: CGPoint(x: rect.maxX, y: 0))
+        return path
+    }
+}
+
 // MARK: - Shelf Shape
 
 struct ShelfTopShape: Shape {
@@ -799,14 +1011,16 @@ struct BookCarousel: View {
     let bookJump: CGFloat
     let bookTurn: CGFloat
     let onBookTap: (Int) -> Void
+    @Binding var currentPage: Int
+    var pageDragOffset: CGFloat = 0
+    var bookRotation: CGFloat = 0
     var newBookDrop: CGFloat = 1
     var droppingBookIndex: Int? = nil
     var entranceSlide: CGFloat = 0
-
     private var isIPad: Bool { screenWidth > 500 }
-    private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 : screenWidth * 0.58 }
+    private var bookWidth: CGFloat { isIPad ? screenWidth * 0.48 * 0.70 * 1.40 : screenWidth * 0.58 }
     private var bookHeight: CGFloat { isIPad ? 456 : 342 }
-    private var bookSpacing: CGFloat { isIPad ? 40 : 20 }
+    private var bookSpacing: CGFloat { 20 }
 
     @State private var isDragging: Bool = false
     @State private var dragVelocity: CGFloat = 0
@@ -829,11 +1043,12 @@ struct BookCarousel: View {
         CGFloat(index - selectedIndex) + dragOffset / totalBookWidth
     }
 
-    /// Smooth interpolation: scale from distance — drops off quickly so side books are small
+    /// Smooth interpolation: scale from distance — reaches non-selected size at dist 1, stays there
     private func scaleForDistance(_ dist: CGFloat) -> CGFloat {
-        let t = min(abs(dist), 2.0) / 2.0
-        let curved = t * t // quadratic falloff for sharper drop
-        return maxScale - (maxScale - minScale) * curved
+        let t = min(abs(dist), 1.0)
+        let nonSelectedScale: CGFloat = 0.75
+        let curved = t * t // quadratic: stays big near center, drops to non-selected
+        return maxScale - (maxScale - nonSelectedScale) * curved
     }
 
     /// Y-axis rotation from distance — all books face straight forward
@@ -871,10 +1086,60 @@ struct BookCarousel: View {
             VStack {
                 Spacer()
                 VStack(spacing: 0) {
+                    // Top edge of shelf
+                    Rectangle()
+                        .fill(Color(hex: "E0E0E0"))
+                        .frame(height: 1)
+
                     // Top surface - perspective trapezoid
-                    ShelfTopShape()
-                        .fill(Color.white)
-                        .frame(height: shelfTopSurface)
+                    ZStack {
+                        ShelfTopShape()
+                            .fill(Color.white)
+
+                        // Emojis, stamps & graffiti scattered on shelf, flattened as if lying on the surface
+                        GeometryReader { shelfGeo in
+                            let flatTilt: Double = 60
+                            let flatPersp: Double = 0.4
+
+                            // Stamps (passport / postmark images)
+                            let stamps: [(String, CGFloat, CGFloat, Double, CGFloat)] = [
+                                // (image, x%, y%, rotation, size)
+                                ("stamp1", 0.30, 0.42, -12, isIPad ? 70 : 48),
+                                ("stamp2", 0.65, 0.50,   8, isIPad ? 50 : 34),
+                                ("stamp3", 0.44, 0.60,  -5, isIPad ? 45 : 30),
+                            ]
+                            ForEach(Array(stamps.enumerated()), id: \.offset) { _, s in
+                                Image(s.0)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: s.4)
+                                    .opacity(0.35)
+                                    .rotationEffect(.degrees(s.3))
+                                    .rotation3DEffect(.degrees(flatTilt), axis: (x: 1, y: 0, z: 0), perspective: flatPersp)
+                                    .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: 1)
+                                    .position(x: shelfGeo.size.width * s.1, y: shelfGeo.size.height * s.2)
+                            }
+
+                            // Graffiti tags & icon
+                            let graffiti: [(String, CGFloat, CGFloat, Double, CGFloat, Double)] = [
+                                ("graffiti1", 0.14, 0.38,   6, isIPad ? 80 : 55, 0.30),
+                                ("icon", 0.75, 0.42, -10, isIPad ? 90 : 60, 1.0),
+                                ("graffiti3", 0.50, 0.55,   3, isIPad ? 70 : 48, 0.30),
+                            ]
+                            ForEach(Array(graffiti.enumerated()), id: \.offset) { _, g in
+                                Image(g.0)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: g.4)
+                                    .opacity(g.5)
+                                    .rotationEffect(.degrees(g.3))
+                                    .rotation3DEffect(.degrees(flatTilt), axis: (x: 1, y: 0, z: 0), perspective: flatPersp)
+                                    .shadow(color: Color.black.opacity(0.06), radius: 1, x: 0, y: 1)
+                                    .position(x: shelfGeo.size.width * g.1, y: shelfGeo.size.height * g.2)
+                            }
+                        }
+                    }
+                    .frame(height: shelfTopSurface)
 
                     // Highlight lip
                     Rectangle()
@@ -897,27 +1162,16 @@ struct BookCarousel: View {
                         .fill(Color(hex: "B0B0B0"))
                         .frame(height: 0.5)
 
-                    // Under-shelf drop shadow
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.black.opacity(0.16),
-                                    Color.black.opacity(0.08),
-                                    Color.black.opacity(0.03),
-                                    Color.black.opacity(0.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                    // Under-shelf drop shadow (hidden)
+                    Color.clear
                         .frame(height: shelfShadowHeight)
                 }
                 .compositingGroup()
                 .shadow(color: Color.black.opacity(0.10), radius: 8, x: 0, y: 4)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 1.5))
+            .opacity(openBookIndex == nil ? 1 : max(0, 1 - Double(openBookProgress) * 2.5))
+            .offset(y: openBookIndex == nil ? 0 : geometry.size.height * 0.4 * min(1, CGFloat(openBookProgress) * 2.5))
             .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openBookProgress)
 
             // ── Books ──
@@ -925,10 +1179,12 @@ struct BookCarousel: View {
                 ForEach(Array(notebooks.enumerated()), id: \.element.id) { index, notebook in
                     let isOpeningThis = openBookIndex == index
                     let dist = continuousPosition(index: index, totalBookWidth: totalBookWidth)
-                    let itemScale = isOpeningThis ? 1.0 : scaleForDistance(dist)
+                    let itemScale = isOpeningThis ? (1.0 + openBookProgress * 0.08) : scaleForDistance(dist)
                     let rotationDeg = isOpeningThis ? 0.0 : rotationForDistance(dist)
                     let shadowOp = shadowOpacityForDistance(dist)
-                    let vOffset = isOpeningThis ? CGFloat(0) : verticalOffsetForDistance(dist)
+                    // Center the book in the carousel when opening
+                    let openCenterOffset = shelfTotal + (bookHeight - geometry.size.height) / 2
+                    let vOffset = isOpeningThis ? openCenterOffset : verticalOffsetForDistance(dist)
                     let zIdx: Double = isOpeningThis ? 10 : Double(1000) - abs(Double(dist)) * 100
 
                     // Micro float: only the centered book gets a subtle breathing animation
@@ -946,12 +1202,16 @@ struct BookCarousel: View {
                         openProgress: isOpeningThis ? openBookProgress : 0,
                         jump: isOpeningThis ? bookJump : 0,
                         turn: isOpeningThis ? bookTurn : 0,
+                        currentPage: $currentPage,
+                        pageDragOffset: isOpeningThis ? pageDragOffset : 0,
+                        bookRotation: isOpeningThis ? bookRotation : 0,
                         distanceFromCenter: dist,
                         shadowOpacity: shadowOp,
                         scrollVelocity: dragVelocity,
-                        dropProgress: index == droppingBookIndex ? newBookDrop : 1
+                        dropProgress: index == droppingBookIndex ? newBookDrop : 1,
+                        screenWidth: screenWidth
                     )
-                    .scaleEffect(itemScale, anchor: .bottom)
+                    .scaleEffect(itemScale, anchor: isOpeningThis ? .center : .bottom)
                     .rotation3DEffect(
                         .degrees(rotationDeg),
                         axis: (x: 0, y: 1, z: 0),
@@ -1027,7 +1287,7 @@ struct BookCarousel: View {
 
                         if newIndex != oldIndex {
                             #if canImport(UIKit)
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            Haptics.medium.impactOccurred()
                             #endif
                         }
 
@@ -1139,6 +1399,31 @@ struct Button3D: View {
     }
 }
 
+// MARK: - Lined Page View
+
+struct LinedPageView: View {
+    let pageText: String
+    let pageNumber: Int
+    let totalPages: Int
+    let creationDate: Date
+    let pageWidth: CGFloat
+    let pageHeight: CGFloat
+
+    private let lineSpacing: CGFloat = 28
+    private let topMargin: CGFloat = 56
+
+    private var dateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, d MMMM yyyy"
+        return formatter.string(from: creationDate)
+    }
+
+    var body: some View {
+        Color(hex: "F4F2EC")
+            .frame(width: pageWidth, height: pageHeight)
+    }
+}
+
 // MARK: - Book Item
 
 struct BookItem: View {
@@ -1151,10 +1436,14 @@ struct BookItem: View {
     var openProgress: CGFloat = 0
     var jump: CGFloat = 0
     var turn: CGFloat = 0
+    @Binding var currentPage: Int
+    var pageDragOffset: CGFloat = 0
+    var bookRotation: CGFloat = 0
     var distanceFromCenter: CGFloat = 0
     var shadowOpacity: Double = 0.15
     var scrollVelocity: CGFloat = 0
     var dropProgress: CGFloat = 1
+    var screenWidth: CGFloat = 390
 
     /// Drop offset: starts 500pt below, rises to 0
     private var dropOffset: CGFloat {
@@ -1166,20 +1455,12 @@ struct BookItem: View {
         dropProgress < 1 ? Double(1 - dropProgress) * 8 : 0
     }
 
-    /// The angle the front cover rotates open (0 = closed, ~160 = fully open)
-    private var coverOpenAngle: Double {
-        Double(openProgress) * -160
-    }
+    /// Turn angle (disabled — book stays portrait)
+    private var turnAngle: Double { 0 }
 
-    /// The whole book turns so the right side recedes
-    private var wholeTurnAngle: Double {
-        Double(turn) * -35
-    }
+    /// Vertical centering handled by carousel vOffset; no extra rise needed
+    private var riseOffset: CGFloat { 0 }
 
-    /// Shift right to center the full open visual
-    private var centeringOffset: CGFloat {
-        openProgress * (bookWidth * 0.35)
-    }
 
     /// Motion blur amount based on scroll velocity
     private var motionBlurRadius: CGFloat {
@@ -1206,28 +1487,250 @@ struct BookItem: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // ── Pages revealed behind the cover when opening ──
+            // ── Open book view (vertical book spread, pages turn left/right) ──
             if isOpening || openProgress > 0 {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "FCFBF7"))
-                    .frame(width: bookWidth, height: bookHeight)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
-                    )
-                    .overlay(
-                        VStack(spacing: 24) {
-                            ForEach(0..<8, id: \.self) { _ in
-                                Rectangle()
-                                    .fill(Color.black.opacity(0.05))
-                                    .frame(height: 1)
+                let isIPadBook = screenWidth > 500
+                let openBookW = isIPadBook ? screenWidth * 0.80 : screenWidth * 0.94
+                let halfBookW = openBookW / 2
+                let openBookH = halfBookW * 1.5
+                let pageInset: CGFloat = 10
+                let pageH = openBookH - pageInset * 2
+                let halfW = halfBookW - pageInset
+                let totalPages = notebook.pages.count
+                let fullFlip = openBookW * 0.4
+
+                // Continuous scroll position: currentPage + fractional drag
+                let dragFraction = -pageDragOffset / fullFlip
+                let scrollPos = CGFloat(currentPage) + dragFraction
+
+                ZStack {
+                    // ── LEFT PANEL (turned pages) ──
+                    ZStack {
+                        // Back cover
+                        notebook.coverColor
+                        UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8, bottomTrailingRadius: 0, topTrailingRadius: 0)
+                            .strokeBorder(Color.black.opacity(0.3), lineWidth: 3)
+                            .blur(radius: 3)
+                            .padding(3)
+
+                        // Depth shading for left half
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.black.opacity(0.18), location: 0),
+                                .init(color: Color.black.opacity(0.04), location: 0.3),
+                                .init(color: Color.clear, location: 0.55),
+                                .init(color: Color.black.opacity(0.15), location: 1.0),
+                            ],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .allowsHitTesting(false)
+
+                        // Left (turned) pages
+                        ForEach(0..<totalPages, id: \.self) { i in
+                            let diff = scrollPos - CGFloat(i)
+                            if diff > -5 && diff < 6 && diff > 0.5 {
+                                let pageText = notebook.pages[i].text
+                                let angle: Double = {
+                                    if diff < 1.0 {
+                                        return (1.0 - Double(diff)) * 180.0
+                                    } else {
+                                        return -Double(min(diff - 1.0, 4)) * 2.5
+                                    }
+                                }()
+                                let zOrder: Double = diff < 1.0 ? 100 : 50.0 - Double(diff - 1.0) * 10
+                                let shadowA: Double = diff < 1.0 ? sin(Double(diff) * .pi) * 0.25 : 0
+
+                                HStack(spacing: 0) {
+                                    Spacer(minLength: 0)
+                                    LinedPageView(
+                                        pageText: pageText,
+                                        pageNumber: i + 1,
+                                        totalPages: totalPages,
+                                        creationDate: notebook.creationDate,
+                                        pageWidth: halfW,
+                                        pageHeight: pageH
+                                    )
+                                    .frame(width: halfW, height: pageH)
+                                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 6, bottomTrailingRadius: 0, topTrailingRadius: 0))
+                                    .overlay(alignment: .trailing) {
+                                        LinearGradient(
+                                            stops: [
+                                                .init(color: Color.black.opacity(0.22), location: 0),
+                                                .init(color: Color.black.opacity(0.12), location: 0.2),
+                                                .init(color: Color.black.opacity(0.04), location: 0.5),
+                                                .init(color: Color.clear, location: 1.0),
+                                            ],
+                                            startPoint: .trailing, endPoint: .leading
+                                        )
+                                        .frame(width: 35)
+                                    }
+                                    .overlay {
+                                        Color.black.opacity(shadowA)
+                                            .allowsHitTesting(false)
+                                    }
+                                    .rotation3DEffect(
+                                        .degrees(angle),
+                                        axis: (x: 0, y: 1, z: 0),
+                                        anchor: .trailing,
+                                        perspective: 0.5
+                                    )
+                                }
+                                .padding(.vertical, pageInset)
+                                .padding(.leading, pageInset)
+                                .zIndex(zOrder)
                             }
                         }
-                        .padding(.horizontal, bookWidth * 0.15)
-                        .padding(.vertical, bookHeight * 0.12)
-                        .opacity(Double(openProgress))
+
+                        // Spine binding (right edge = center of book)
+                        HStack(spacing: 0) {
+                            Spacer()
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.black.opacity(0.35), location: 0),
+                                    .init(color: Color.black.opacity(0.15), location: 0.3),
+                                    .init(color: Color.clear, location: 1.0),
+                                ],
+                                startPoint: .trailing, endPoint: .leading
+                            )
+                            .frame(width: 18)
+                        }
+                        .allowsHitTesting(false)
+                    }
+                    .frame(width: halfBookW, height: openBookH)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0))
+                    .overlay(
+                        UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10, bottomTrailingRadius: 0, topTrailingRadius: 0)
+                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
                     )
-                    .shadow(color: Color.black.opacity(0.08), radius: 4, x: 2, y: 2)
+                    .rotation3DEffect(
+                        .degrees(13),
+                        axis: (x: 0, y: 1, z: 0),
+                        anchor: .trailing,
+                        perspective: 0.35
+                    )
+                    // Phase 2: cover unfolds from closed (160°) to open (0°) around spine
+                    .rotation3DEffect(
+                        .degrees({
+                            let phase2 = max(0, (Double(openProgress) - 0.5) * 2)
+                            return -(1 - phase2) * 160
+                        }()),
+                        axis: (x: 0, y: 1, z: 0),
+                        anchor: .trailing,
+                        perspective: 0.25
+                    )
+                    .offset(x: -halfBookW / 2 + halfBookW * 0.07)
+
+                    // ── RIGHT PANEL (unturned pages) ──
+                    ZStack {
+                        // Back cover
+                        notebook.coverColor
+                        UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 8, topTrailingRadius: 8)
+                            .strokeBorder(Color.black.opacity(0.3), lineWidth: 3)
+                            .blur(radius: 3)
+                            .padding(3)
+
+                        // Depth shading for right half
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.black.opacity(0.15), location: 0),
+                                .init(color: Color.clear, location: 0.45),
+                                .init(color: Color.black.opacity(0.04), location: 0.7),
+                                .init(color: Color.black.opacity(0.18), location: 1.0),
+                            ],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .allowsHitTesting(false)
+
+                        // Right (unturned) pages
+                        ForEach(0..<totalPages, id: \.self) { i in
+                            let diff = scrollPos - CGFloat(i)
+                            if diff > -5 && diff < 6 && diff <= 0.5 {
+                                let pageText = notebook.pages[i].text
+                                let angle: Double = {
+                                    if diff >= 0 {
+                                        return -Double(diff) * 180.0
+                                    } else {
+                                        return Double(min(-diff, 4)) * 2.5
+                                    }
+                                }()
+                                let zOrder: Double = diff >= 0 ? 100 : 50.0 - Double(-diff) * 10
+                                let shadowA: Double = diff >= 0 ? sin(Double(diff) * .pi) * 0.25 : 0
+
+                                HStack(spacing: 0) {
+                                    LinedPageView(
+                                        pageText: pageText,
+                                        pageNumber: i + 1,
+                                        totalPages: totalPages,
+                                        creationDate: notebook.creationDate,
+                                        pageWidth: halfW,
+                                        pageHeight: pageH
+                                    )
+                                    .frame(width: halfW, height: pageH)
+                                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6))
+                                    .overlay(alignment: .leading) {
+                                        LinearGradient(
+                                            stops: [
+                                                .init(color: Color.black.opacity(0.22), location: 0),
+                                                .init(color: Color.black.opacity(0.12), location: 0.2),
+                                                .init(color: Color.black.opacity(0.04), location: 0.5),
+                                                .init(color: Color.clear, location: 1.0),
+                                            ],
+                                            startPoint: .leading, endPoint: .trailing
+                                        )
+                                        .frame(width: 35)
+                                    }
+                                    .overlay {
+                                        Color.black.opacity(shadowA)
+                                            .allowsHitTesting(false)
+                                    }
+                                    .rotation3DEffect(
+                                        .degrees(angle),
+                                        axis: (x: 0, y: 1, z: 0),
+                                        anchor: .leading,
+                                        perspective: 0.5
+                                    )
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.vertical, pageInset)
+                                .padding(.trailing, pageInset)
+                                .zIndex(zOrder)
+                            }
+                        }
+
+                        // Spine binding (left edge = center of book)
+                        HStack(spacing: 0) {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.black.opacity(0.35), location: 0),
+                                    .init(color: Color.black.opacity(0.15), location: 0.3),
+                                    .init(color: Color.clear, location: 1.0),
+                                ],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                            .frame(width: 18)
+                            Spacer()
+                        }
+                        .allowsHitTesting(false)
+                    }
+                    .frame(width: halfBookW, height: openBookH)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 10, topTrailingRadius: 10))
+                    .overlay(
+                        UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 10, topTrailingRadius: 10)
+                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
+                    )
+                    .rotation3DEffect(
+                        .degrees(-13),
+                        axis: (x: 0, y: 1, z: 0),
+                        anchor: .leading,
+                        perspective: 0.35
+                    )
+                    .offset(x: halfBookW / 2 - halfBookW * 0.07)
+                }
+                .frame(width: openBookW, height: openBookH)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
+                .offset(y: -(bookHeight - openBookH) / 2)
+                .opacity(openProgress > 0 ? 1 : 0)
             }
 
             // ── The book cover ──
@@ -1236,34 +1739,37 @@ struct BookItem: View {
                 .overlay(alignment: .topTrailing) {
                     if isSelected && !isOpening {
                         Button(action: {}) {
-                            HStack(spacing: 5) {
-                                ForEach(0..<3, id: \.self) { _ in
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 5, height: 5)
-                                }
+                            Text("Edit")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(notebook.hasCoverArt ? .white : .white)
+                        }
+                        .padding(.horizontal, 17)
+                        .padding(.vertical, 7)
+                        .background {
+                            if notebook.hasCoverArt {
+                                #if canImport(UIKit)
+                                BlurView(style: .systemUltraThinMaterialDark)
+                                    .clipShape(Capsule())
+                                    .opacity(0.7)
+                                #else
+                                Capsule().fill(Color.white.opacity(0.3))
+                                #endif
+                            } else {
+                                Capsule().fill(Color.black.opacity(0.20))
                             }
                         }
-                        .frame(width: 81, height: 32)
-                        .background(Color.black.opacity(0.20))
-                        .cornerRadius(0)
-                        .padding(.trailing, 8)
-                        .padding(.top, 10)
+                        .padding(.trailing, 13)
+                        .padding(.top, 13)
                     }
                 }
-                .rotation3DEffect(
-                    .degrees(coverOpenAngle),
-                    axis: (x: 0, y: 1, z: 0),
-                    anchor: .leading,
-                    perspective: 0.4
-                )
+                .opacity(openProgress > 0 ? 0 : 1)
         }
         .frame(width: bookWidth, height: bookHeight)
         // Vertical shade along the left edge
         .background(alignment: .bottomLeading) {
             if !isOpening && openProgress == 0 {
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black.opacity(shadeLerp(0.30, 0.20)))
+                    .fill(Color.black.opacity(shadeLerp(0.45, 0.30)))
                     .frame(width: bookWidth * shadeLerp(0.18, 0.16), height: bookHeight * shadeLerp(0.78, 0.70))
                     .blur(radius: shadeLerp(13, 14))
                     .offset(x: -bookWidth * shadeLerp(0.15, 0.12), y: -bookHeight * 0.04)
@@ -1276,8 +1782,8 @@ struct BookItem: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.black.opacity(shadeLerp(0.12, 0.08)),
-                                Color.black.opacity(shadeLerp(0.05, 0.03)),
+                                Color.black.opacity(shadeLerp(0.20, 0.14)),
+                                Color.black.opacity(shadeLerp(0.10, 0.06)),
                                 Color.clear
                             ],
                             startPoint: .bottomTrailing,
@@ -1289,18 +1795,11 @@ struct BookItem: View {
                     .offset(x: -bookWidth * shadeLerp(0.18, 0.14))
             }
         }
-        // Sun from the right — shadow casts to the left
-        .shadow(color: Color.black.opacity(shadeLerp(0.12, 0.08)), radius: shadeLerp(10, 6), x: shadeLerp(-10, -5), y: shadeLerp(8, 5))
-        .shadow(color: Color.black.opacity(shadeLerp(0.06, 0.03)), radius: shadeLerp(3, 2), x: shadeLerp(-3, -2), y: shadeLerp(3, 2))
         // Subtle motion blur during fast scrolling
         .blur(radius: motionBlurRadius)
-        // Turn the whole book
-        .rotation3DEffect(
-            .degrees(wholeTurnAngle),
-            axis: (x: 0, y: 1, z: 0),
-            perspective: 0.3
-        )
-        .offset(x: centeringOffset)
+        .rotationEffect(.degrees(turnAngle))
+        // Vertical offset
+        .offset(y: riseOffset)
         // Jump offset (for open animation)
         .offset(y: jump * -40)
         // Drop from above animation (new book add)
@@ -1310,9 +1809,10 @@ struct BookItem: View {
             axis: (x: 0, y: 0, z: 1)
         )
         .opacity(dropProgress < 0.01 ? 0 : 1)
-        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: openProgress)
+        .animation(.spring(response: 0.6, dampingFraction: 0.75), value: openProgress)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: pageDragOffset)
         .animation(.spring(response: 0.35, dampingFraction: 0.5), value: jump)
-        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: turn)
+        .animation(.spring(response: 0.6, dampingFraction: 0.72), value: turn)
     }
 }
 
@@ -1328,7 +1828,7 @@ struct BookShape: Shape {
         let w = rect.width
         let h = rect.height
 
-        path.move(to: CGPoint(x: r * 0.4, y: 0))
+        path.move(to: CGPoint(x: 0, y: 0))
         path.addLine(to: CGPoint(x: w - r, y: 0))
         path.addQuadCurve(
             to: CGPoint(x: w, y: r),
@@ -1339,8 +1839,8 @@ struct BookShape: Shape {
             to: CGPoint(x: w - r, y: h),
             control: CGPoint(x: w, y: h)
         )
-        path.addLine(to: CGPoint(x: r * 0.4, y: h))
-        path.addLine(to: CGPoint(x: r * 0.4, y: 0))
+        path.addLine(to: CGPoint(x: 0, y: h))
+        path.addLine(to: CGPoint(x: 0, y: 0))
         path.closeSubpath()
         return path
     }
@@ -1357,95 +1857,98 @@ struct BookCover: View {
     private var groove2X: CGFloat { width * 0.095 }
 
     var body: some View {
-        Canvas { context, size in
-            let rect = CGRect(origin: .zero, size: size)
+        ZStack {
+            Canvas { context, size in
+                let rect = CGRect(origin: .zero, size: size)
 
-            let bookPath = BookShape(
-                cornerRadius: cornerRad,
-                insetRight: groove2X + 4
-            ).path(in: rect)
+                let bookPath = BookShape(
+                    cornerRadius: cornerRad,
+                    insetRight: groove2X + 4
+                ).path(in: rect)
 
-            // 1. Base cover fill
-            context.fill(bookPath, with: .color(notebook.coverColor))
+                // 1. Base cover fill — use spineColor for spine area when cover art present
+                let spineBaseColor = notebook.hasCoverArt ? notebook.spineColor : notebook.coverColor
+                context.fill(bookPath, with: .color(spineBaseColor))
 
-            // 2. Paper grain texture
-            let grainGrad = Gradient(stops: [
-                .init(color: Color.white.opacity(0.03), location: 0),
-                .init(color: Color.black.opacity(0.02), location: 0.5),
-                .init(color: Color.white.opacity(0.01), location: 1.0)
-            ])
-            context.fill(bookPath, with: .radialGradient(
-                grainGrad,
-                center: CGPoint(x: size.width * 0.3, y: size.height * 0.2),
-                startRadius: 0,
-                endRadius: max(size.width, size.height) * 0.9
-            ))
+                // 2. Paper grain texture
+                let grainGrad = Gradient(stops: [
+                    .init(color: Color.white.opacity(0.03), location: 0),
+                    .init(color: Color.black.opacity(0.02), location: 0.5),
+                    .init(color: Color.white.opacity(0.01), location: 1.0)
+                ])
+                context.fill(bookPath, with: .radialGradient(
+                    grainGrad,
+                    center: CGPoint(x: size.width * 0.3, y: size.height * 0.2),
+                    startRadius: 0,
+                    endRadius: max(size.width, size.height) * 0.9
+                ))
 
-            // 3. Primary groove line
-            let g1Rect = CGRect(x: groove1X - 3, y: 0, width: 7, height: size.height)
-            let g1Path = Path(g1Rect).intersection(bookPath)
-            let g1Grad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.26), location: 0),
-                .init(color: Color.black.opacity(0.34), location: 0.45),
-                .init(color: Color.black.opacity(0.12), location: 0.6),
-                .init(color: Color.white.opacity(0.08), location: 0.85),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(g1Path, with: .linearGradient(
-                g1Grad,
-                startPoint: CGPoint(x: g1Rect.minX, y: rect.midY),
-                endPoint: CGPoint(x: g1Rect.maxX, y: rect.midY)
-            ))
+                // 3. Primary groove line — tinted with spine color when cover art
+                let g1Rect = CGRect(x: groove1X - 3, y: 0, width: 7, height: size.height)
+                let g1Path = Path(g1Rect).intersection(bookPath)
+                let g1Grad = Gradient(stops: [
+                    .init(color: Color.black.opacity(0.26), location: 0),
+                    .init(color: Color.black.opacity(0.34), location: 0.45),
+                    .init(color: Color.black.opacity(0.12), location: 0.6),
+                    .init(color: Color.white.opacity(0.08), location: 0.85),
+                    .init(color: Color.clear, location: 1.0)
+                ])
+                context.fill(g1Path, with: .linearGradient(
+                    g1Grad,
+                    startPoint: CGPoint(x: g1Rect.minX, y: rect.midY),
+                    endPoint: CGPoint(x: g1Rect.maxX, y: rect.midY)
+                ))
 
-            // 4. Second thinner groove line
-            let g2Rect = CGRect(x: groove2X - 0.75, y: 0, width: 2, height: size.height)
-            let g2Path = Path(g2Rect).intersection(bookPath)
-            let g2Grad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.22), location: 0),
-                .init(color: Color.black.opacity(0.26), location: 0.4),
-                .init(color: Color.clear, location: 0.6),
-                .init(color: Color.white.opacity(0.06), location: 0.9),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(g2Path, with: .linearGradient(
-                g2Grad,
-                startPoint: CGPoint(x: g2Rect.minX, y: rect.midY),
-                endPoint: CGPoint(x: g2Rect.maxX, y: rect.midY)
-            ))
+                // 4. Second thinner groove line
+                let g2Rect = CGRect(x: groove2X - 0.75, y: 0, width: 2, height: size.height)
+                let g2Path = Path(g2Rect).intersection(bookPath)
+                let g2Grad = Gradient(stops: [
+                    .init(color: Color.black.opacity(0.22), location: 0),
+                    .init(color: Color.black.opacity(0.26), location: 0.4),
+                    .init(color: Color.clear, location: 0.6),
+                    .init(color: Color.white.opacity(0.06), location: 0.9),
+                    .init(color: Color.clear, location: 1.0)
+                ])
+                context.fill(g2Path, with: .linearGradient(
+                    g2Grad,
+                    startPoint: CGPoint(x: g2Rect.minX, y: rect.midY),
+                    endPoint: CGPoint(x: g2Rect.maxX, y: rect.midY)
+                ))
 
-            // 5. Raised highlight lip
-            let lipRect = CGRect(x: groove2X + 3, y: 0, width: 6, height: size.height)
-            let lipPath = Path(lipRect).intersection(bookPath)
-            let lipGrad = Gradient(stops: [
-                .init(color: Color.white.opacity(0.11), location: 0),
-                .init(color: Color.white.opacity(0.05), location: 0.3),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(lipPath, with: .linearGradient(
-                lipGrad,
-                startPoint: CGPoint(x: lipRect.minX, y: rect.midY),
-                endPoint: CGPoint(x: lipRect.maxX, y: rect.midY)
-            ))
+                // 5. Raised highlight lip
+                let lipRect = CGRect(x: groove2X + 3, y: 0, width: 6, height: size.height)
+                let lipPath = Path(lipRect).intersection(bookPath)
+                let lipGrad = Gradient(stops: [
+                    .init(color: Color.white.opacity(0.11), location: 0),
+                    .init(color: Color.white.opacity(0.05), location: 0.3),
+                    .init(color: Color.clear, location: 1.0)
+                ])
+                context.fill(lipPath, with: .linearGradient(
+                    lipGrad,
+                    startPoint: CGPoint(x: lipRect.minX, y: rect.midY),
+                    endPoint: CGPoint(x: lipRect.maxX, y: rect.midY)
+                ))
 
-            // 6. Ambient occlusion
-            let aoRect = CGRect(x: groove2X + 2, y: 0, width: 3, height: size.height)
-            let aoPath = Path(aoRect).intersection(bookPath)
-            let aoGrad = Gradient(stops: [
-                .init(color: Color.black.opacity(0.10), location: 0),
-                .init(color: Color.clear, location: 1.0)
-            ])
-            context.fill(aoPath, with: .linearGradient(
-                aoGrad,
-                startPoint: CGPoint(x: aoRect.minX, y: rect.midY),
-                endPoint: CGPoint(x: aoRect.maxX, y: rect.midY)
-            ))
+                // 6. Ambient occlusion
+                let aoRect = CGRect(x: groove2X + 2, y: 0, width: 3, height: size.height)
+                let aoPath = Path(aoRect).intersection(bookPath)
+                let aoGrad = Gradient(stops: [
+                    .init(color: Color.black.opacity(0.10), location: 0),
+                    .init(color: Color.clear, location: 1.0)
+                ])
+                context.fill(aoPath, with: .linearGradient(
+                    aoGrad,
+                    startPoint: CGPoint(x: aoRect.minX, y: rect.midY),
+                    endPoint: CGPoint(x: aoRect.maxX, y: rect.midY)
+                ))
 
-            // 7. Edge stroke (subtle)
-            context.stroke(bookPath, with: .color(Color.black.opacity(0.04)), lineWidth: 0.5)
+                // 7. Edge stroke (subtle)
+                context.stroke(bookPath, with: .color(Color.black.opacity(0.04)), lineWidth: 0.5)
 
-            // 10. Deep pressed title text
-            let cleanTitle = String(notebook.title.unicodeScalars.filter { !$0.properties.isEmojiPresentation }).trimmingCharacters(in: .whitespaces)
-            let titleFont: Font = .system(size: size.width * 0.09, weight: .medium)
+                if !notebook.hasCoverArt {
+                    // 10. Deep pressed title text
+                    let cleanTitle = String(notebook.title.unicodeScalars.filter { !$0.properties.isEmojiPresentation }).trimmingCharacters(in: .whitespaces)
+                    let titleFont: Font = .system(size: size.width * 0.09, weight: .medium)
 
             let measureResolved = context.resolve(Text(cleanTitle).font(titleFont).foregroundColor(.black))
             let titleSize = measureResolved.measure(in: CGSize(width: size.width * 0.75, height: size.height))
@@ -1474,6 +1977,28 @@ struct BookCover: View {
             aoCtx.addFilter(.blur(radius: 1.5))
             let aoResolved2 = aoCtx.resolve(Text(cleanTitle).font(titleFont).foregroundColor(Color.black.opacity(0.10)))
             aoCtx.draw(aoResolved2, at: CGPoint(x: titleCenter.x, y: titleCenter.y + 0.5), anchor: .center)
+                }
+            }
+
+            // Cover art image overlay — from spine groove to right edge
+            if notebook.hasCoverArt && !notebook.textureURL.isEmpty {
+                let coverStartX = groove2X + 6
+                let coverWidth = width - coverStartX
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: coverStartX)
+                    ZStack {
+                        notebook.coverColor
+                        Image(notebook.textureURL)
+                            .resizable()
+                            .scaledToFill()
+                            .scaleEffect(0.7)
+                    }
+                    .frame(width: coverWidth, height: height)
+                    .clipped()
+                }
+                .frame(width: width, height: height)
+                .clipShape(BookShape(cornerRadius: cornerRad, insetRight: groove2X + 4))
+            }
         }
         .frame(width: width, height: height)
     }
@@ -1689,271 +2214,6 @@ extension Color {
     }
 }
 
-// MARK: - Carousel Book View (Pop-up Carousel Style)
-
-struct CarouselBookView: View {
-    @Binding var notebook: Notebook
-    let coverColor: Color
-    let spineColor: Color
-    let onClose: () -> Void
-
-    @State private var rotation: Double = 0
-    @State private var dragRotation: Double = 0
-    @State private var appear: CGFloat = 0
-
-    var body: some View {
-        GeometryReader { geo in
-            let isIPad = min(geo.size.width, geo.size.height) > 500
-            let pageCount = notebook.pages.count
-            let sliceAngle = 360.0 / Double(max(pageCount, 1))
-            let size = min(geo.size.width, geo.size.height)
-
-            let radius: CGFloat = isIPad ? size * 0.3 : size * 0.26
-            let pageW: CGFloat = isIPad ? min(size * 0.24, 180) : min(size * 0.32, 140)
-            let pageH = pageW * 1.4
-
-            ZStack {
-                coverColor.ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    // Header
-                    HStack {
-                        Button(action: onClose) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                                .frame(width: 34, height: 34)
-                                .background(Circle().fill(Color.white.opacity(0.15)))
-                        }
-                        Spacer()
-                        Text(notebook.title)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
-                        Spacer()
-                        Button(action: addPage) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.8))
-                                .frame(width: 34, height: 34)
-                                .background(Circle().fill(Color.white.opacity(0.15)))
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-
-                    Spacer()
-
-                    // 3D Carousel
-                    ZStack {
-                        // Ground shadow
-                        Ellipse()
-                            .fill(
-                                RadialGradient(
-                                    colors: [Color.black.opacity(0.3), Color.black.opacity(0.05), Color.clear],
-                                    center: .center,
-                                    startRadius: radius * 0.1,
-                                    endRadius: radius * 1.4
-                                )
-                            )
-                            .frame(width: radius * 3, height: radius * 0.9)
-                            .offset(y: pageH * 0.52 + 10)
-                            .opacity(Double(appear))
-
-                        // Center hub
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [coverColor, coverColor.opacity(0.5)],
-                                    center: .center,
-                                    startRadius: 0,
-                                    endRadius: 14
-                                )
-                            )
-                            .frame(width: 22, height: 22)
-                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                            .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-                            .opacity(Double(appear))
-                            .zIndex(1)
-
-                        // Pages arranged in circle
-                        ForEach(Array(notebook.pages.enumerated()), id: \.element.id) { index, page in
-                            let totalRot = rotation + dragRotation
-                            let rawAngle = sliceAngle * Double(index) + totalRot
-                            let normA = carouselNormAngle(rawAngle)
-                            let rad = rawAngle * .pi / 180.0
-                            let currentR = Double(radius) * Double(appear)
-
-                            let x = sin(rad) * currentR
-                            let z = cos(rad) * currentR
-
-                            // Cosine depth: 1 at front (0°), 0 at back (180°)
-                            let cosVal = cos(normA * .pi / 180.0)
-                            let depth01 = (cosVal + 1.0) / 2.0
-
-                            // Sharp falloff — only ~2 front pages fully visible
-                            let vis = pow(depth01, 2.5)
-                            let pageScale = 0.25 + vis * 0.75
-                            let pageOpacity = max(0.06, vis)
-
-                            // Page + fold tab
-                            VStack(spacing: 0) {
-                                CarouselPagePanel(
-                                    page: page,
-                                    pageNumber: index + 1,
-                                    width: pageW,
-                                    height: pageH
-                                )
-
-                                // Fold tab connecting to center
-                                ZStack(alignment: .top) {
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [coverColor.opacity(0.55), coverColor.opacity(0.15)],
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            )
-                                        )
-                                    Rectangle()
-                                        .fill(Color.black.opacity(0.2))
-                                        .frame(height: 1.5)
-                                }
-                                .frame(width: pageW * 0.55, height: 10)
-                            }
-                            .scaleEffect(pageScale * (0.5 + 0.5 * appear))
-                            .offset(x: CGFloat(x))
-                            .opacity(pageOpacity * Double(appear))
-                            .zIndex(depth01 * 100)
-                            .rotation3DEffect(
-                                .degrees(-rawAngle),
-                                axis: (x: 0, y: 1, z: 0),
-                                perspective: 0.4
-                            )
-                        }
-                    }
-                    // Top-down tilt
-                    .rotation3DEffect(
-                        .degrees(22),
-                        axis: (x: 1, y: 0, z: 0),
-                        perspective: 0.5
-                    )
-                    .frame(height: pageH * 1.35)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 5)
-                            .onChanged { value in
-                                dragRotation = Double(value.translation.width) * 0.5
-                            }
-                            .onEnded { value in
-                                let vel = Double(value.predictedEndTranslation.width - value.translation.width) * 0.2
-                                rotation += dragRotation + vel
-                                dragRotation = 0
-
-                                let nearest = round(rotation / sliceAngle) * sliceAngle
-                                withAnimation(.spring(response: 0.5, dampingFraction: 0.78)) {
-                                    rotation = nearest
-                                }
-                            }
-                    )
-
-                    Spacer()
-
-                    // Page indicator
-                    let idx = frontPageIndex(pageCount: pageCount, sliceAngle: sliceAngle)
-                    Text("Page \(idx + 1) of \(pageCount)")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
-                        .padding(.bottom, 24)
-                }
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.75)) {
-                appear = 1
-            }
-        }
-    }
-
-    private func carouselNormAngle(_ angle: Double) -> Double {
-        var a = angle.truncatingRemainder(dividingBy: 360)
-        if a > 180 { a -= 360 }
-        if a < -180 { a += 360 }
-        return a
-    }
-
-    private func frontPageIndex(pageCount: Int, sliceAngle: Double) -> Int {
-        guard pageCount > 0, sliceAngle > 0 else { return 0 }
-        let total = rotation + dragRotation
-        let norm = total.truncatingRemainder(dividingBy: 360)
-        let adjusted = norm < 0 ? norm + 360 : norm
-        let idx = Int(round(adjusted / sliceAngle)) % pageCount
-        return (pageCount - idx) % pageCount
-    }
-
-    private func addPage() {
-        notebook.pages.append(Page(text: ""))
-    }
-}
-
-// MARK: - Carousel Page Panel
-
-struct CarouselPagePanel: View {
-    let page: Page
-    let pageNumber: Int
-    let width: CGFloat
-    let height: CGFloat
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            // Paper
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(hex: "FAFAF7"))
-                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
-
-            // Paper texture
-            RoundedRectangle(cornerRadius: 8)
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.3), Color.clear, Color.black.opacity(0.02)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            // Border
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.black.opacity(0.06), lineWidth: 0.5)
-
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(pageNumber)")
-                    .font(.system(size: 11, weight: .medium, design: .serif))
-                    .foregroundColor(Color(hex: "B0ADA8"))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                if !page.text.isEmpty {
-                    Text(page.text)
-                        .font(.system(size: 12, design: .serif))
-                        .foregroundColor(Color(hex: "2D2D2D"))
-                        .lineLimit(nil)
-                } else {
-                    // Ruled lines
-                    VStack(spacing: height * 0.06) {
-                        ForEach(0..<10, id: \.self) { _ in
-                            Rectangle()
-                                .fill(Color(hex: "E0DDD8").opacity(0.5))
-                                .frame(height: 0.5)
-                        }
-                    }
-                    .padding(.top, 6)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-        }
-        .frame(width: width, height: height)
-    }
-}
 
 #Preview {
     ContentView()
